@@ -1,0 +1,320 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f2f2f7;
+  --card: #ffffff;
+  --text: #1c1c1e;
+  --muted: #8a8a8e;
+  --line: rgba(60, 60, 67, 0.10);
+  --green: #0b7a45;
+  --green-ink: #ffffff;
+  --green-soft: rgba(11, 122, 69, 0.10);
+  --amber: #b25000;
+  --chip: rgba(120, 120, 128, 0.12);
+  --shadow: 0 1px 1px rgba(0, 0, 0, 0.04), 0 10px 30px rgba(0, 0, 0, 0.05);
+  --radius: 18px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --card: #1c1c1e;
+    --text: #f2f2f7;
+    --muted: #98989f;
+    --line: rgba(255, 255, 255, 0.10);
+    --green: #30c27c;
+    --green-ink: #04240f;
+    --green-soft: rgba(48, 194, 124, 0.14);
+    --amber: #ff9f0a;
+    --chip: rgba(120, 120, 128, 0.24);
+    --shadow: none;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  min-height: 100dvh;
+  overscroll-behavior-y: contain;
+}
+
+#app {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: calc(env(safe-area-inset-top) + 18px) 16px calc(env(safe-area-inset-bottom) + 24px);
+}
+
+/* ---------- header ---------- */
+
+.top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.02;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.sub {
+  margin: 5px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.refresh {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin-top: 2px;
+  border: none;
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.refresh:active { transform: scale(0.94); }
+.refresh:disabled { opacity: 0.75; }
+
+.refresh svg {
+  width: 18px;
+  height: 18px;
+}
+
+.refresh.spin svg {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.statusline {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 14px 2px 0;
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+
+.dot.live { background: var(--green); }
+.dot.stale { background: var(--amber); }
+.dot.err { background: #ff3b30; }
+
+/* ---------- nearest strip ---------- */
+
+.nearest {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--green-soft);
+}
+
+.nearest[hidden] { display: none; }
+
+.nearest .pin {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--green);
+}
+
+.nearest-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.nearest-stop {
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nearest-dist {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.nearest-eta {
+  flex: none;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- routes ---------- */
+
+.route {
+  margin-top: 24px;
+}
+
+.route-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 2px 10px;
+}
+
+.badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 8px;
+  background: var(--green);
+  color: var(--green-ink);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.route-desc {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- stop card ---------- */
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 14px 16px 15px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow);
+}
+
+.card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 11px;
+}
+
+.stop-name {
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.stop-seq {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.etas {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+  min-height: 30px;
+}
+
+.eta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 3px 8px 4px;
+  border-radius: 9px;
+  background: var(--chip);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.eta b {
+  font-size: 19px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.eta small {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.eta.first {
+  background: var(--green);
+  color: var(--green-ink);
+}
+
+.eta.first small {
+  color: inherit;
+  opacity: 0.82;
+}
+
+.eta.due {
+  background: var(--amber);
+  color: #fff;
+  font-weight: 700;
+}
+
+.eta.first.due small { color: #fff; }
+
+.empty {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 30px;
+}
+
+/* ---------- footer ---------- */
+
+.foot {
+  margin-top: 28px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+  opacity: 0.9;
+}
+
+.foot p { margin: 0; }
