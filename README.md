@@ -195,6 +195,17 @@ python3 -m http.server 8000
 Then open <http://localhost:8000>. (A server is needed because browsers
 block service workers on `file://`.)
 
+## Releasing
+
+```sh
+python3 release.py 2.6.1     # stamp version, build time and cache
+git add -A && git commit -m "…" && git push
+```
+
+`release.py` sets `APP_BUILD` to the current Hong Kong time and bumps the
+service-worker cache name (`bus-times-vN`), so the HTML, JS and cached shell
+always ship together. Without an argument it only re-stamps the build time.
+
 ## Put it on the iPhone
 
 The app needs to be served over **HTTPS** for the Home Screen install and

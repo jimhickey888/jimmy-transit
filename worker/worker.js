@@ -19,7 +19,7 @@ const ALLOWED_ORIGINS = [
 ];
 
 const MAX_LEAD_MIN = 30;
-const MAX_ALERTS = 20;
+const MAX_ALERT_BATCH = 12;
 const utf8 = new TextEncoder();
 
 /* ---------------- encoding helpers ---------------- */
@@ -202,7 +202,7 @@ function validSubscription(subscription) {
     && typeof subscription.keys.auth === 'string';
 }
 
-async function storeAlert(env, subscription, alert) {
+async function storeSubscription(env, subscription) {
   const endpoint = subscription.endpoint;
   const keys = { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth };
   const subId = await subIdFor(endpoint);
@@ -212,7 +212,10 @@ async function storeAlert(env, subscription, alert) {
     JSON.stringify({ endpoint, keys }),
     { expirationTtl: 60 * 60 * 24 * 120 },
   );
+  return subId;
+}
 
+async function storeOneAlert(env, subId, alert) {
   const now = Date.now();
   const fireAt = Math.max(now + 15000, Math.min(Number(alert.fireAt), now + 24 * 60 * 60 * 1000));
   const leadMinutes = Math.min(MAX_LEAD_MIN, Math.max(0, Number(alert.leadMinutes) || 5));
@@ -229,6 +232,12 @@ async function storeAlert(env, subscription, alert) {
 
   const ttl = Math.max(3600, Math.ceil((fireAt - now) / 1000) + 86400);
   await env.ALERTS.put(`alert:${alert.id}`, JSON.stringify(record), { expirationTtl: ttl });
+  return fireAt;
+}
+
+async function storeAlert(env, subscription, alert) {
+  const subId = await storeSubscription(env, subscription);
+  const fireAt = await storeOneAlert(env, subId, alert);
   return { subId, fireAt };
 }
 
@@ -335,6 +344,31 @@ export default {
       return json({ ok: true, ...stored }, 200, origin);
     }
 
+    /* Batch form used by the app: one subscription write for all milestones. */
+    if (url.pathname === '/alerts' && request.method === 'POST') {
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ error: 'invalid json' }, 400, origin);
+      }
+
+      if (!validSubscription(body.subscription)) {
+        return json({ error: 'subscription must include endpoint, keys.p256dh, keys.auth' }, 400, origin);
+      }
+      if (!Array.isArray(body.alerts) || body.alerts.length === 0
+          || body.alerts.length > MAX_ALERT_BATCH || !body.alerts.every(validAlert)) {
+        return json({ error: `alerts must be 1-${MAX_ALERT_BATCH} valid alert objects` }, 400, origin);
+      }
+
+      const subId = await storeSubscription(env, body.subscription);
+      const fireAt = [];
+      for (const alert of body.alerts) {
+        fireAt.push(await storeOneAlert(env, subId, alert));
+      }
+      return json({ ok: true, subId, alerts: body.alerts.length, fireAt }, 200, origin);
+    }
+
     if (url.pathname === '/alert' && request.method === 'DELETE') {
       const id = url.searchParams.get('id');
       if (!id) return json({ error: 'id is required' }, 400, origin);
@@ -342,9 +376,11 @@ export default {
       return json({ ok: true }, 200, origin);
     }
 
+    /* Diagnostics below are unauthenticated: they only report counts and
+       can trigger a scan of alerts that are already due. */
     if (url.pathname === '/alerts') {
       const listed = await env.ALERTS.list({ prefix: 'alert:' });
-      return json({ count: listed.keys.length, alerts: MAX_ALERTS }, 200, origin);
+      return json({ count: listed.keys.length }, 200, origin);
     }
 
     /* Diagnostics: shows which settings are present and whether a VAPID

@@ -1,1 +1,3 @@
 worker/.vapid/
+__pycache__/
+*.pyc

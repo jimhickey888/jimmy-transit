@@ -6,6 +6,8 @@ It is a single Cloudflare Worker (free plan is enough) with a KV namespace
 and a one-minute cron trigger. The app itself stays static on GitHub Pages.
 
 - `POST /alert` — store a subscription and one scheduled alert
+- `POST /alerts` — batch form: one subscription write plus up to 12 alerts
+  (the app uses this for the 10/8/6/4/2/0 milestones)
 - `DELETE /alert?id=…` — cancel an alert
 - `GET /health` — liveness check
 - `GET /selftest` — shows which settings are present and whether a VAPID

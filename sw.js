@@ -1,6 +1,6 @@
 /* App-shell cache. Live ETA requests always go to the network. */
 
-const CACHE = 'bus-times-v42';
+const CACHE = 'bus-times-v43';
 const SHELL = [
   './',
   './index.html',
@@ -34,6 +34,24 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+
+  /* HTML is network-first, so a deploy can never pair a new app.js with an
+     old shell. Everything else stays cache-first with a background update. */
+  if (event.request.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(event.request, { cache: 'no-store' });
+        if (response && response.ok) {
+          const cache = await caches.open(CACHE);
+          await cache.put('./index.html', response.clone());
+        }
+        return response;
+      } catch {
+        return (await caches.match('./index.html')) || (await caches.match('./'));
+      }
+    })());
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
@@ -83,5 +101,13 @@ self.addEventListener('notificationclick', (event) => {
     }
     if (self.clients.openWindow) return self.clients.openWindow(target);
     return undefined;
+  })());
+});
+
+/* iOS can replace a push subscription; ask the app to re-arm its alerts. */
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clients) client.postMessage({ type: 'push-subscription-change' });
   })());
 });
