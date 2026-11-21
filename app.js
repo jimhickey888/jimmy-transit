@@ -10,12 +10,12 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.0.0';
-const APP_BUILD = '22 Nov 2026, 01:05 HKT';
+const APP_VERSION = '2.0.1';
+const APP_BUILD = '22 Nov 2026, 01:40 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
-const PUSH_ENDPOINT = '';
+const PUSH_ENDPOINT = 'https://jimmy-transit-push.jimhickey.workers.dev';
 const PUSH_VAPID_KEY = 'BCPXl_A_ZsChEqNNcVJgMpjKCvKXUlpFE1-TQlxoPgYxLOUDX09V49xnJ4U6DKK1BS80-upzWIAB3aOBNeyC2DM';
 const PUSH_LEAD_MIN = 5;
 

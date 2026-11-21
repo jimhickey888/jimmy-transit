@@ -136,11 +136,12 @@ push sender. `worker/` is a small Cloudflare Worker (free plan) that stores
 one alert per tracked bus in KV and sends it five minutes before departure
 from a one-minute cron trigger.
 
-Setup is in **`worker/README.md`**; it takes a KV namespace, three
-variables/secrets and a cron entry, then the worker URL goes into
-`PUSH_ENDPOINT` in `app.js`. The matching VAPID public key is already in
-`app.js`; the private key stays in `worker/.vapid/` and in the Cloudflare
-secret, never in git.
+This one is deployed at
+`https://jimmy-transit-push.jimhickey.workers.dev` and configured in
+`PUSH_ENDPOINT` in `app.js`. Setup notes, including how to redeploy or rotate
+keys, are in **`worker/README.md`**. The VAPID public key is in `app.js`; the
+private key stays in `worker/.vapid/` and in the Cloudflare secret, never in
+git.
 
 Limits to expect:
 
