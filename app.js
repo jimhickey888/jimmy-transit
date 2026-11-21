@@ -6,6 +6,17 @@
 const GMB_API = 'https://data.etagmb.gov.hk';
 const CTB_API = 'https://rt.data.gov.hk';
 const KMB_API = 'https://data.etabus.gov.hk/v1/transport/kmb';
+
+const APP_VERSION = '1.4.0';
+const APP_BUILD = '21 Nov 2026, 22:10 HKT';
+
+PAGES.push({
+  id: 'info',
+  title: 'Info',
+  subtitle: 'Endpoints · Build',
+  api: 'info',
+  routes: [],
+});
 const REFRESH_MS = 30000;
 const MAX_ETAS = 3;
 const MOVE_THRESHOLD_M = 20;
@@ -51,10 +62,23 @@ function sortedEntries(list, now) {
     .map((entry) => {
       const m = minutesFrom(entry, now);
       if (m === null) return null;
-      return { m, scheduled: !!entry.scheduled };
+      return { m, scheduled: !!entry.scheduled, time: clockFrom(entry) };
     })
     .filter(Boolean)
     .sort((a, b) => a.m - b.m);
+}
+
+function fmtClock(date) {
+  return date.toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+function clockFrom(entry) {
+  const t = Date.parse(entry && entry.timestamp);
+  return Number.isFinite(t) ? fmtClock(new Date(t)) : '';
 }
 
 function fmtTime(date) {
@@ -302,7 +326,7 @@ function etasHtml(page, route, stop) {
   const entries = sortedEntries(cached.list, Date.now()).slice(0, MAX_ETAS);
   if (!entries.length) return '<span class="empty">No arrivals right now</span>';
 
-  return entries.map(({ m, scheduled }, i) => {
+  return entries.map(({ m, scheduled, time }, i) => {
     const classes = ['eta'];
     if (scheduled) classes.push('sched');
     else if (i === 0) classes.push('first');
@@ -310,9 +334,10 @@ function etasHtml(page, route, stop) {
 
     const cls = classes.join(' ');
     const title = scheduled ? 'Scheduled time' : 'Live arrival';
+    const at = time ? `<span class="at">(${esc(time)})</span>` : '';
 
-    if (m <= 0) return `<span class="${cls}" title="${title}">Due</span>`;
-    return `<span class="${cls}" title="${title}"><b>${m}</b><small>min</small></span>`;
+    if (m <= 0) return `<span class="${cls}" title="${title}">Due${at}</span>`;
+    return `<span class="${cls}" title="${title}"><b>${m}</b><small>min</small>${at}</span>`;
   }).join('');
 }
 
@@ -347,6 +372,7 @@ function nearestHtml(page) {
   const { route, stop, dist } = near;
   const cached = state.etas.get(keyOf(page, route, stop));
   let eta = '…';
+  let etaTime = '';
   let scheduled = false;
 
   if (cached) {
@@ -358,6 +384,7 @@ function nearestHtml(page) {
         eta = '—';
       } else {
         eta = entries[0].m <= 0 ? 'Due' : `${entries[0].m} min`;
+        etaTime = entries[0].time;
         scheduled = entries[0].scheduled;
       }
     }
@@ -374,7 +401,7 @@ function nearestHtml(page) {
         <div class="nearest-stop">${esc(route.code)} · ${esc(stop.name)}</div>
         <div class="nearest-dist">${fmtDistance(dist)} away</div>
       </div>
-      <div class="nearest-eta${scheduled ? ' sched' : ''}">${esc(eta)}</div>
+      <div class="nearest-eta${scheduled ? ' sched' : ''}">${esc(eta)}${etaTime ? `<span class="at">(${esc(etaTime)})</span>` : ''}</div>
     </div>`;
 }
 
@@ -388,9 +415,43 @@ function sourceLine(page) {
   return 'Real-time data from data.gov.hk<br>Citybus';
 }
 
+function infoHtml() {
+  const endpoints = [
+    ['Minibuses (GMB)', 'https://data.etagmb.gov.hk/eta/route-stop/{route_id}/{route_seq}/{stop_seq}'],
+    ['Citybus', 'https://rt.data.gov.hk/v1/transport/batch/stop-eta/CTB/{stop_id}'],
+    ['KMB', 'https://data.etabus.gov.hk/v1/transport/kmb/eta/{stop_id}/{route}/{service_type}'],
+  ];
+
+  return `
+    <section class="info-block">
+      <h2>Jimmy Bus Tracker</h2>
+      <div class="info-card">
+        <div class="meta-row"><span>Version</span><strong>${esc(APP_VERSION)}</strong></div>
+        <div class="meta-row"><span>Built</span><strong>${esc(APP_BUILD)}</strong></div>
+      </div>
+    </section>
+    <section class="info-block">
+      <h2>Data endpoints</h2>
+      ${endpoints.map(([label, url]) => `
+        <div class="endpoint">
+          <div class="endpoint-label">${esc(label)}</div>
+          <code>${esc(url)}</code>
+        </div>`).join('')}
+    </section>
+    <p class="info-note">
+      Live arrivals from the Transport Department and data.gov.hk.
+      Pages: Citybus, KMB and Minibuses.
+    </p>`;
+}
+
 function renderPage(page) {
   const el = document.getElementById(`body-${page.id}`);
   if (!el) return;
+
+  if (page.api === 'info') {
+    el.innerHTML = infoHtml();
+    return;
+  }
 
   let html = nearestHtml(page);
 
@@ -479,8 +540,8 @@ function syncChrome() {
 
   document.getElementById('title').textContent = page.title;
   const codes = [...new Set(page.routes.map((r) => r.code))];
-  document.getElementById('sub').textContent = codes.join(' · ');
-  document.title = `${page.title} · Bus Times`;
+  document.getElementById('sub').textContent = page.subtitle || codes.join(' · ');
+  document.title = `${page.title} · Jimmy Bus Tracker`;
 
   const dots = document.querySelectorAll('.pdot');
   dots.forEach((dot, i) => {

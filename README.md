@@ -1,16 +1,8 @@
-# Bus Times
+# Jimmy Bus Tracker
 
 A one-screen-per-page iPhone web app showing the next arrivals for the
-buses around Braemar Hill, in three swipeable pages.
-
-**Minibuses** — green minibus **25** and **49M**:
-
-| Route | Stop |
-|-------|------|
-| 25 | 3 — Near Hilltop, Cloud View Road |
-| 25 | 8 — Paterson Street, outside Pearl City Mansion |
-| 49M | 1 — Tin Hau Station Bus Terminus |
-| 49M | 3 — No. 39 Cloud View Road |
+buses around Braemar Hill, in four swipeable pages: **Citybus**, **KMB**,
+**Minibuses** and **Info**.
 
 **Citybus** — routes **27**, **85**, **25A** and **25** (outbound):
 
@@ -21,12 +13,23 @@ buses around Braemar Hill, in three swipeable pages.
 | 25A | 1 — Exhibition Centre Station · 23 — Flora Garden, Cloud View Road |
 | 25 | 1 — Central Ferry, Man Kwong Street · 31 — Flora Garden, Cloud View Road |
 
-**KMB** — route **108**, with one outbound and two inbound stops:
+**KMB** — route **108**, with two outbound and one inbound stop:
 
 | Direction | Stops |
 |-----------|-------|
 | Outbound (Kai Yip → Braemar Hill) | 17 — Cross Harbour Tunnel BBI · 22 — St. Paul's Hospital |
 | Inbound (Braemar Hill → Kai Yip) | 4 — Flora Garden |
+
+**Minibuses** — green minibus **25** and **49M**:
+
+| Route | Stop |
+|-------|------|
+| 25 | 3 — Near Hilltop, Cloud View Road |
+| 25 | 8 — Paterson Street, outside Pearl City Mansion |
+| 49M | 1 — Tin Hau Station Bus Terminus |
+| 49M | 3 — No. 39 Cloud View Road |
+
+**Info** — lists the live-data endpoints, app version and build date/time.
 
 Live data comes from the Transport Department's **eTA GMB** API
 (`data.etagmb.gov.hk`), the **Citybus** batch Stop-ETA API
@@ -44,10 +47,11 @@ poles serve more than one direction.
 
 ## What it does
 
-- Three pages — **Minibuses**, **Citybus** and **KMB** — swipe left/right
-  to switch, or tap the dots next to the status line. Each page keeps its
-  own scroll position.
-- Shows the next 3 buses for each saved stop, in minutes.
+- Four pages — **Citybus**, **KMB**, **Minibuses** and **Info** — swipe
+  left/right to switch, or tap the dots next to the status line. Each page
+  keeps its own scroll position.
+- Shows the next 3 buses for each saved stop, in minutes, with the actual
+  arrival clock time in brackets (e.g. `12 min (21:48)`).
 - Citybus and KMB arrivals are colour-coded: green/grey entries are **live**
   (GPS-based) predictions, and blue entries are **scheduled** times. Live
   data is shown wherever the operator publishes it; scheduled times fill the

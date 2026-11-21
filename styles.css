@@ -272,6 +272,13 @@ h1 {
 
 .nearest-eta.sched { color: var(--sched); }
 
+.nearest-eta .at {
+  margin-left: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
 /* ---------- routes ---------- */
 
 .route {
@@ -396,6 +403,13 @@ h1 {
   color: var(--muted);
 }
 
+.eta .at {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  opacity: 0.9;
+}
+
 .eta.first {
   background: var(--green);
   color: var(--green-ink);
@@ -427,6 +441,22 @@ h1 {
   opacity: 0.85;
 }
 
+.eta.sched .at {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.eta.first .at,
+.eta.first.due .at {
+  color: inherit;
+  opacity: 0.82;
+}
+
+.eta.due .at {
+  color: #fff;
+  opacity: 0.9;
+}
+
 .empty {
   font-size: 14px;
   color: var(--muted);
@@ -445,3 +475,68 @@ h1 {
 }
 
 .foot p { margin: 0; }
+
+/* ---------- info page ---------- */
+
+.info-block { margin-top: 22px; }
+
+.page-inner > .info-block:first-child { margin-top: 16px; }
+
+.info-block h2 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.info-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 6px 16px;
+  box-shadow: var(--shadow);
+}
+
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  font-size: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.meta-row:last-child { border-bottom: 0; }
+.meta-row span { color: var(--muted); }
+.meta-row strong { font-weight: 650; text-align: right; }
+
+.endpoint {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  box-shadow: var(--shadow);
+}
+
+.endpoint-label {
+  font-size: 13px;
+  font-weight: 650;
+  margin-bottom: 4px;
+}
+
+.endpoint code {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.info-note {
+  margin: 18px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
