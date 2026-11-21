@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.0.2';
-const APP_BUILD = '22 Nov 2026, 02:00 HKT';
+const APP_VERSION = '2.0.3';
+const APP_BUILD = '22 Nov 2026, 02:05 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -757,7 +757,7 @@ function infoHtml() {
 
   return `
     <section class="info-block">
-      <h2>Jimmy Bus Tracker</h2>
+      <h2>Jimmy Transit Tracker</h2>
       <div class="info-card">
         <div class="meta-row"><span>Version</span><strong>${esc(APP_VERSION)}</strong></div>
         <div class="meta-row"><span>Built</span><strong>${esc(APP_BUILD)}</strong></div>
