@@ -136,7 +136,14 @@ poles serve more than one direction.
   only straight-line distances are shown; nearest-stop times are only
   fetched for pages whose data is already loaded. Location is optional —
   the saved stops always work.
-- Installable to the Home Screen; runs full-screen with its own icon.
+- Installable to the Home Screen; runs full-screen with its own icon (a
+  green transit badge with a bus and a route pin, drawn as vector artwork in
+  `icons/icon.svg`).
+- Each page heading carries a small colour-coded operator mark: yellow for
+  **Citybus** (also used on the Taikoo page, which runs on Citybus data), red
+  for **KMB**, green for the **minibuses**, blue for **London (TfL)** and
+  green for **Info**. These are original marks, not the operators' official
+  logos.
 - Works in light and dark mode.
 
 ## Tracking a bus

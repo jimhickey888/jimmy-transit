@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Jimmy Transit Tracker">
+  <rect width="1024" height="1024" fill="#0b7a45"/>
+  <circle cx="512" cy="470" r="338" fill="#ffffff" opacity="0.06"/>
+
+  <!-- route line with a stop pin -->
+  <path d="M214 748 C 340 676 438 800 566 762 C 668 732 700 690 754 690"
+        fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="24"
+        stroke-linecap="round" stroke-dasharray="1 52"/>
+  <g transform="translate(754 690)">
+    <path d="M0 0c0-30 22-48 44-48s44 18 44 48c0 33-44 78-44 78S0 33 0 0z" fill="#ffffff"/>
+    <circle cx="44" cy="2" r="17" fill="#0b7a45"/>
+  </g>
+
+  <!-- bus -->
+  <ellipse cx="512" cy="812" rx="236" ry="30" fill="#04240f" opacity="0.18"/>
+  <rect x="360" y="274" width="304" height="468" rx="56" fill="#ffffff"/>
+  <rect x="392" y="314" width="240" height="122" rx="28" fill="#0b7a45"/>
+  <rect x="392" y="452" width="240" height="44" rx="10" fill="#0b7a45" opacity="0.38"/>
+  <rect x="392" y="512" width="240" height="98" rx="24" fill="#0b7a45" opacity="0.88"/>
+  <rect x="392" y="628" width="240" height="30" rx="15" fill="#0b7a45" opacity="0.22"/>
+  <circle cx="424" cy="694" r="17" fill="#0b7a45" opacity="0.85"/>
+  <circle cx="600" cy="694" r="17" fill="#0b7a45" opacity="0.85"/>
+  <rect x="392" y="722" width="62" height="34" rx="17" fill="#0b7a45"/>
+  <rect x="570" y="722" width="62" height="34" rx="17" fill="#0b7a45"/>
+</svg>

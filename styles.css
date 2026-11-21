@@ -82,6 +82,26 @@ body {
 
 .titles { min-width: 0; }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.brand {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: block;
+}
+
+.brand svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 h1 {
   margin: 0;
   font-size: 30px;
@@ -89,6 +109,10 @@ h1 {
   font-weight: 800;
   letter-spacing: -0.025em;
   white-space: nowrap;
+}
+
+.title-row + .sub {
+  padding-left: 44px;
 }
 
 .sub {

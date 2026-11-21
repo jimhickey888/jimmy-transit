@@ -12,8 +12,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.6.0';
-const APP_BUILD = '22 Nov 2026, 03:39 HKT';
+const APP_VERSION = '2.7.0';
+const APP_BUILD = '22 Nov 2026, 03:53 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -23,6 +23,34 @@ const PUSH_VAPID_KEY = 'BCPXl_A_ZsChEqNNcVJgMpjKCvKXUlpFE1-TQlxoPgYxLOUDX09V49xn
 const ALERT_MINUTES = [10, 8, 6, 4, 2, 0];
 /* In-app beeps happen at the same points, in seconds before departure. */
 const IN_APP_MARKS = [600, 480, 360, 240, 120, 0];
+
+/* Original operator marks: colour-coded, drawn inline so they stay crisp and
+   cost no requests. These are not the operators' official logos. */
+function brandMark(bg, ink, variant = 'decker') {
+  const minibus = variant === 'minibus';
+  const body = minibus
+    ? '<rect x="6" y="8.6" width="20" height="15.6" rx="4" fill="#fff"/>'
+    : '<rect x="8" y="4.2" width="16" height="21.6" rx="3.8" fill="#fff"/>';
+  const windows = minibus
+    ? `<rect x="9" y="12" width="14" height="6.4" rx="2" fill="${bg}"/>`
+    : `<rect x="10.5" y="6.8" width="11" height="5.4" rx="1.6" fill="${bg}"/>`
+      + `<rect x="10.5" y="13.8" width="11" height="4.6" rx="1.6" fill="${bg}"/>`;
+  const wheels = minibus
+    ? '<circle cx="11.5" cy="26.6" r="2" fill="#fff"/><circle cx="20.5" cy="26.6" r="2" fill="#fff"/>'
+    : '<circle cx="11.8" cy="27.2" r="2" fill="#fff"/><circle cx="20.2" cy="27.2" r="2" fill="#fff"/>';
+  const grille = `<rect x="13.2" y="${minibus ? '20.8' : '20.4'}" width="5.6" height="2.6" rx="1.3" fill="${ink}" opacity="0.5"/>`;
+  return `<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">`
+    + `<rect width="32" height="32" rx="9" fill="${bg}"/>${body}${windows}${wheels}${grille}</svg>`;
+}
+
+const BRAND_MARKS = {
+  citybus: brandMark('#f4b400', '#13233f'),
+  segment: brandMark('#f4b400', '#13233f'),
+  kmb: brandMark('#c8102e', '#ffffff'),
+  minibus: brandMark('#0b7a45', '#ffffff', 'minibus'),
+  london: brandMark('#0019a8', '#ffffff'),
+  info: brandMark('#0b7a45', '#ffffff'),
+};
 
 const TRACK_KEY = 'jimmy.tracked.v1';
 const PREFS_KEY = 'jimmy.prefs.v1';
@@ -1756,6 +1784,8 @@ function syncChrome() {
   if (!page) return;
 
   document.getElementById('title').textContent = page.title;
+  const brand = document.getElementById('brand');
+  if (brand) brand.innerHTML = BRAND_MARKS[page.id] || BRAND_MARKS.info;
   const codes = page.routes
     ? [...new Set(page.routes.map((r) => r.code))]
     : [];
