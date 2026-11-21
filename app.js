@@ -334,10 +334,12 @@ function etasHtml(page, route, stop) {
 
     const cls = classes.join(' ');
     const title = scheduled ? 'Scheduled time' : 'Live arrival';
-    const at = time ? `<span class="at">(${esc(time)})</span>` : '';
+    const timeHtml = time ? `<span class="eta-time">${esc(time)}</span>` : '';
 
-    if (m <= 0) return `<span class="${cls}" title="${title}">Due${at}</span>`;
-    return `<span class="${cls}" title="${title}"><b>${m}</b><small>min</small>${at}</span>`;
+    if (m <= 0) {
+      return `<span class="${cls}" title="${title}"><span class="eta-main">Due</span>${timeHtml}</span>`;
+    }
+    return `<span class="${cls}" title="${title}"><span class="eta-main"><b>${m}</b><small>min</small></span>${timeHtml}</span>`;
   }).join('');
 }
 
@@ -401,7 +403,10 @@ function nearestHtml(page) {
         <div class="nearest-stop">${esc(route.code)} · ${esc(stop.name)}</div>
         <div class="nearest-dist">${fmtDistance(dist)} away</div>
       </div>
-      <div class="nearest-eta${scheduled ? ' sched' : ''}">${esc(eta)}${etaTime ? `<span class="at">(${esc(etaTime)})</span>` : ''}</div>
+      <div class="nearest-eta${scheduled ? ' sched' : ''}">
+        <span class="nearest-eta-main">${esc(eta)}</span>
+        ${etaTime ? `<span class="nearest-eta-time">${esc(etaTime)}</span>` : ''}
+      </div>
     </div>`;
 }
 
@@ -444,6 +449,20 @@ function infoHtml() {
     </p>`;
 }
 
+function sharedStopIds(page) {
+  const counts = new Map();
+  for (const route of page.routes) {
+    for (const stop of route.bookmarks) {
+      counts.set(stop.stop_id, (counts.get(stop.stop_id) || 0) + 1);
+    }
+  }
+  return new Set(
+    [...counts.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([id]) => id),
+  );
+}
+
 function renderPage(page) {
   const el = document.getElementById(`body-${page.id}`);
   if (!el) return;
@@ -453,6 +472,7 @@ function renderPage(page) {
     return;
   }
 
+  const shared = sharedStopIds(page);
   let html = nearestHtml(page);
 
   for (const route of page.routes) {
@@ -464,8 +484,9 @@ function renderPage(page) {
         </div>`;
 
     for (const stop of route.bookmarks) {
+      const sharedClass = shared.has(stop.stop_id) ? ' shared' : '';
       html += `
-        <article class="card">
+        <article class="card${sharedClass}">
           <div class="card-top">
             <div class="stop-head">
               <div class="stop-name">${esc(stop.name)}</div>

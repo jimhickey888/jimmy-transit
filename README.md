@@ -50,8 +50,10 @@ poles serve more than one direction.
 - Four pages — **Citybus**, **KMB**, **Minibuses** and **Info** — swipe
   left/right to switch, or tap the dots next to the status line. Each page
   keeps its own scroll position.
-- Shows the next 3 buses for each saved stop, in minutes, with the actual
-  arrival clock time in brackets (e.g. `12 min (21:48)`).
+- Shows the next 3 buses for each saved stop, with a large countdown and
+  the actual arrival clock time underneath (e.g. `12 min` above `21:48`).
+- Stops that appear under more than one route on the same page are given a
+  matching lighter card background so the group stands out.
 - Citybus and KMB arrivals are colour-coded: green/grey entries are **live**
   (GPS-based) predictions, and blue entries are **scheduled** times. Live
   data is shown wherever the operator publishes it; scheduled times fill the
