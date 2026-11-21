@@ -66,8 +66,12 @@ poles serve more than one direction.
 - Shows the next 3 buses for each saved stop, with a large countdown and
   the actual arrival clock time with seconds underneath (e.g. `12 min`
   above `21:48:30`).
-- Stops that appear under more than one route on the same page are given a
-  matching lighter card background so the group stands out.
+- Arrivals are grouped by **stop and direction**, not by route: each stop
+  heading shows the direction and distance, with every route serving that
+  stop listed underneath.
+- Stops served by more than one route, or with groups in both directions,
+  get a matching lighter card background so the group stands out. TfL
+  groups also show their stop ID.
 - Citybus and KMB arrivals are colour-coded: green/grey entries are **live**
   (GPS-based) predictions, and blue entries are **scheduled** times. Live
   data is shown wherever the operator publishes it; scheduled times fill the

@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '1.5.0';
-const APP_BUILD = '21 Nov 2026, 23:10 HKT';
+const APP_VERSION = '1.6.0';
+const APP_BUILD = '21 Nov 2026, 23:30 HKT';
 
 PAGES.push({
   id: 'info',
@@ -435,31 +435,89 @@ function etasHtml(page, route, stop) {
   }).join('');
 }
 
-function destHtml(page, route, stop) {
-  if (page.api === 'gmb') return '';
-  if (page.api === 'tfl') {
-    return route.towards ? `<div class="stop-dest">→ ${esc(route.towards)}</div>` : '';
-  }
-  const cached = state.etas.get(keyOf(page, route, stop));
-  if (!cached || !cached.dest) return '';
-  return `<div class="stop-dest">→ ${esc(cached.dest)}</div>`;
-}
-
-/* Straight-line distance from the last known position to this stop.
-   Bookmark rows carry only names and sequence numbers, so look up the
-   coordinates on the route's full stop list. Needs no network call and
-   updates as the user moves. */
-function distanceHtml(route, stop) {
-  const pos = state.lastPos;
-  if (!pos) return '';
-
+function stopPoint(route, stop) {
   const point = route.stops.find(
     (s) => s.seq === stop.seq && s.stop_id === stop.stop_id,
   );
-  if (!point || typeof point.lat !== 'number' || typeof point.lon !== 'number') return '';
+  if (!point || typeof point.lat !== 'number' || typeof point.lon !== 'number') return null;
+  return { lat: point.lat, lon: point.lon };
+}
 
-  const dist = distanceM(pos, { lat: point.lat, lon: point.lon });
-  return `<div class="stop-dist">${fmtDistance(dist)} away</div>`;
+/* Straight-line distance from the last known position to a stop group. */
+function groupDistance(group) {
+  if (!state.lastPos) return null;
+  for (const { route, stop } of group.routes) {
+    const point = stopPoint(route, stop);
+    if (point) return distanceM(state.lastPos, point);
+  }
+  return null;
+}
+
+function directionOf(page, route, stop) {
+  if (route.towards) return route.towards;
+  const cached = state.etas.get(keyOf(page, route, stop));
+  if (cached && cached.dest) return cached.dest;
+  return route.dest || route.direction || '';
+}
+
+/* Normalise destination strings so variants of the same direction (for
+   example “Braemar Hill” and “Braemar Hill / North Point”) group
+   together, while genuinely different directions stay apart. */
+function directionKey(direction) {
+  return direction
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .split(/[\/,]/)[0]
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function directionLabel(route, direction) {
+  if (route.towards) return `towards ${route.towards}`;
+  return direction ? `→ ${direction}` : '';
+}
+
+/* Citybus destinations come from the live rows; until those arrive we do
+   not know which way the buses at a stop are heading, so leave the label
+   blank rather than guessing from the route's terminal. */
+function groupLabel(page, route, stop, direction) {
+  if (page.api === 'ctb') {
+    const cached = state.etas.get(keyOf(page, route, stop));
+    if (!cached || !cached.dest) return '';
+  }
+  return directionLabel(route, direction);
+}
+
+function stopGroups(page) {
+  const groups = new Map();
+  const stopOrder = new Map();
+
+  for (const route of page.routes) {
+    for (const stop of route.bookmarks) {
+      if (!stopOrder.has(stop.stop_id)) stopOrder.set(stop.stop_id, stopOrder.size);
+
+      const direction = directionOf(page, route, stop);
+      const groupKey = `${stop.stop_id}::${directionKey(direction)}`;
+      let group = groups.get(groupKey);
+      if (!group) {
+        group = {
+          stop_id: stop.stop_id,
+          name: stop.name,
+          label: groupLabel(page, route, stop, direction),
+          order: groups.size,
+          routes: [],
+        };
+        groups.set(groupKey, group);
+      }
+      if (!group.routes.some((entry) => entry.route === route && entry.stop === stop)) {
+        group.routes.push({ route, stop });
+      }
+    }
+  }
+
+  return [...groups.values()].sort((a, b) => (
+    stopOrder.get(a.stop_id) - stopOrder.get(b.stop_id) || a.order - b.order
+  ));
 }
 
 function nearestHtml(page) {
@@ -548,20 +606,6 @@ function infoHtml() {
     </p>`;
 }
 
-function sharedStopIds(page) {
-  const counts = new Map();
-  for (const route of page.routes) {
-    for (const stop of route.bookmarks) {
-      counts.set(stop.stop_id, (counts.get(stop.stop_id) || 0) + 1);
-    }
-  }
-  return new Set(
-    [...counts.entries()]
-      .filter(([, count]) => count > 1)
-      .map(([id]) => id),
-  );
-}
-
 function renderPage(page) {
   const el = document.getElementById(`body-${page.id}`);
   if (!el) return;
@@ -571,36 +615,43 @@ function renderPage(page) {
     return;
   }
 
-  const shared = sharedStopIds(page);
+  const groups = stopGroups(page);
+  const stopCounts = new Map();
+  for (const group of groups) {
+    stopCounts.set(group.stop_id, (stopCounts.get(group.stop_id) || 0) + 1);
+  }
+
   let html = nearestHtml(page);
 
-  for (const route of page.routes) {
-    const routeDesc = route.desc || `${route.orig} → ${route.dest}`;
+  for (const group of groups) {
+    const dist = groupDistance(group);
+    const shared = group.routes.length > 1 || stopCounts.get(group.stop_id) > 1;
+    const sharedClass = shared ? ' shared' : '';
+    const meta = [
+      group.label,
+      Number.isFinite(dist) ? `${fmtDistance(dist)} away` : '',
+    ].filter(Boolean).join(' · ');
+    const idHtml = page.api === 'tfl'
+      ? `<div class="stop-group-id">Stop ${esc(group.stop_id)}</div>`
+      : '';
+
     html += `
-      <section class="route">
-        <div class="route-head">
-          <span class="badge">${esc(route.code)}</span>
-          <span class="route-desc">${esc(routeDesc)}</span>
-        </div>`;
-
-    for (const stop of route.bookmarks) {
-      const sharedClass = shared.has(stop.stop_id) ? ' shared' : '';
-      const seqHtml = page.api === 'tfl' ? '' : `<div class="stop-seq">Stop ${stop.seq}</div>`;
-      html += `
-        <article class="card${sharedClass}">
-          <div class="card-top">
-            <div class="stop-head">
-              <div class="stop-name">${esc(stop.name)}</div>
-              ${destHtml(page, route, stop)}
-            </div>
-            ${seqHtml}
+      <section class="stop-group">
+        <div class="stop-group-head">
+          <div class="stop-group-main">
+            <div class="stop-group-name">${esc(group.name)}</div>
+            <div class="stop-group-dir">${esc(meta)}</div>
           </div>
-          ${distanceHtml(route, stop)}
-          <div class="etas">${etasHtml(page, route, stop)}</div>
-        </article>`;
-    }
-
-    html += '</section>';
+          ${idHtml}
+        </div>
+        <article class="card${sharedClass}">
+          ${group.routes.map(({ route, stop }) => `
+            <div class="route-row">
+              <span class="badge">${esc(route.code)}</span>
+              <div class="etas">${etasHtml(page, route, stop)}</div>
+            </div>`).join('')}
+        </article>
+      </section>`;
   }
 
   html += `<footer class="foot"><p>${sourceLine(page)}</p></footer>`;
