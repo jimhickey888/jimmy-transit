@@ -105,7 +105,7 @@ poles serve more than one direction.
 ## Run it locally
 
 ```sh
-cd minibus-25-49m
+cd jimmy-transit
 python3 -m http.server 8000
 ```
 
@@ -119,11 +119,11 @@ for location access. Any static host works.
 
 ### GitHub Pages
 
-1. Create a new repository, e.g. `minibus-2549`.
+1. Create a new repository, e.g. `jimmy-transit`.
 2. Upload everything in this folder (not the folder itself).
 3. Repo **Settings → Pages → Build and deployment**: Source = *Deploy from
    a branch*, Branch = `main`, folder = `/ (root)`. Save.
-4. Open `https://<your-username>.github.io/minibus-2549/` in Safari on the
+4. Open `https://<your-username>.github.io/jimmy-transit/` in Safari on the
    iPhone.
 5. Tap **Share → Add to Home Screen**.
 
