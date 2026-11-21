@@ -39,6 +39,11 @@ poles serve more than one direction.
   or tap the dots next to the status line. Each page keeps its own scroll
   position.
 - Shows the next 3 buses for each saved stop, in minutes.
+- Citybus publishes at most three live times, and sometimes only two. When
+  it stops short, the third slot is projected from the gap between the live
+  ones and shown with a dashed outline and a `~` (for example `~51 min`).
+  Real times always come first and replace the projection as soon as they
+  appear.
 - Refreshes every 30 seconds while the screen is open.
 - Uses your location to highlight the nearest stop *on the page you are
   looking at* in a strip at the top. Location is optional — the saved
@@ -122,6 +127,11 @@ arriving soonest and labels it with that group's destination.
 - Citybus cards are built from the stop lists chosen in `bake.py` (all
   outbound stop numbers). The destination on each card shows which way the
   listed buses are actually travelling.
+- Citybus does not publish scheduled departure times in its open data:
+  the ETA API returns only 1–3 live estimates per route and direction.
+  The dashed Citybus entries are therefore projections from the live
+  service interval, not timetable times; they disappear once Citybus
+  publishes the real arrival.
 - If every Citybus card is empty for a long stretch during service hours,
   the Citybus feed itself may be down; it usually recovers without a change
   here. The minibus page is unaffected.
