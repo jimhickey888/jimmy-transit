@@ -58,9 +58,9 @@ DIR_CODES = {"outbound": "O", "inbound": "I"}
 # direction. 108's service type 1 runs Kai Yip <-> Braemar Hill.
 KMB_ROUTES = [
     {"code": "108", "bound": "outbound", "service_type": 1,
-     "bookmarks": [4]},
-    {"code": "108", "bound": "inbound", "service_type": 1,
      "bookmarks": [17, 22]},
+    {"code": "108", "bound": "inbound", "service_type": 1,
+     "bookmarks": [4]},
 ]
 
 

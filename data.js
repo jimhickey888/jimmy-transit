@@ -1220,9 +1220,14 @@ const PAGES = [
         "dest": "BRAEMAR HILL",
         "bookmarks": [
           {
-            "seq": 4,
-            "stop_id": "32A2D05A195364DC",
-            "name": "SKYLINE TOWER"
+            "seq": 17,
+            "stop_id": "06C9926B2E2B304F",
+            "name": "CROSS HARBOUR TUNNEL BBI"
+          },
+          {
+            "seq": 22,
+            "stop_id": "BEFD9F22518EC452",
+            "name": "ST. PAUL'S HOSPITAL"
           }
         ],
         "stops": [
@@ -1461,14 +1466,9 @@ const PAGES = [
         "dest": "KAI YIP",
         "bookmarks": [
           {
-            "seq": 17,
-            "stop_id": "AA97FFC49AE957A5",
-            "name": "VALLEY ROAD HUNG HOM"
-          },
-          {
-            "seq": 22,
-            "stop_id": "6D6EE27729F3C486",
-            "name": "THE FAMILY PLANNING ASSOCIATION OF HK"
+            "seq": 4,
+            "stop_id": "632639E4C5ED8F2E",
+            "name": "FLORA GARDEN"
           }
         ],
         "stops": [

@@ -25,8 +25,8 @@ buses around Braemar Hill, in three swipeable pages.
 
 | Direction | Stops |
 |-----------|-------|
-| Outbound (Kai Yip → Braemar Hill) | 4 — Skyline Tower |
-| Inbound (Braemar Hill → Kai Yip) | 17 — Valley Road Hung Hom · 22 — The Family Planning Association of HK |
+| Outbound (Kai Yip → Braemar Hill) | 17 — Cross Harbour Tunnel BBI · 22 — St. Paul's Hospital |
+| Inbound (Braemar Hill → Kai Yip) | 4 — Flora Garden |
 
 Live data comes from the Transport Department's **eTA GMB** API
 (`data.etagmb.gov.hk`), the **Citybus** batch Stop-ETA API
