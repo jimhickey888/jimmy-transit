@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.3.2';
-const APP_BUILD = '22 Nov 2026, 03:05 HKT';
+const APP_VERSION = '2.3.3';
+const APP_BUILD = '22 Nov 2026, 03:07 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -1642,10 +1642,18 @@ function readSavedPage() {
 
 function restorePage(index) {
   if (!Number.isInteger(index) || index <= 0 || index >= PAGES.length) return;
-  requestAnimationFrame(() => {
-    goToPage(index, false);
-    syncChrome();
-  });
+  let tries = 3;
+  /* On a cold launch the pager can still have zero width for a frame or two
+     on iOS, which would silently drop the scroll. */
+  const place = () => {
+    if (pagerEl().clientWidth > 0) {
+      goToPage(index, false);
+      syncChrome();
+      return;
+    }
+    if (tries-- > 0) requestAnimationFrame(place);
+  };
+  requestAnimationFrame(place);
 }
 
 function init() {
