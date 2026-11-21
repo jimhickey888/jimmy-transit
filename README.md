@@ -2,7 +2,7 @@
 
 A one-screen-per-page iPhone web app showing the next arrivals for the
 buses around Braemar Hill and in Wimbledon, London, in six swipeable
-pages: **Citybus**, **KMB**, **Minibuses**, **Taikoo ↔ New Trend**,
+pages: **Citybus**, **Taikoo ↔ New Trend**, **KMB**, **Minibuses**,
 **London** and **Info**.
 
 **Citybus** — routes **27**, **85**, **25A** and **25** (outbound):
@@ -73,10 +73,15 @@ poles serve more than one direction.
 
 ## What it does
 
-- Six pages — **Citybus**, **KMB**, **Minibuses**,
-  **Taikoo ↔ New Trend**, **London** and **Info** — swipe left/right to
-  switch, or tap the dots next to the status line. Each page keeps its own
-  scroll position.
+- Six pages — **Citybus**, **Taikoo ↔ New Trend**, **KMB**,
+  **Minibuses**, **London** and **Info** — swipe left/right to switch, or
+  tap the dots next to the status line. Each page keeps its own scroll
+  position.
+- **Citybus** and **Taikoo** load with the app and refresh every 30 s.
+  **KMB**, **Minibuses** and **London** fetch their first data only when
+  you swipe to them (one request per route + stop for KMB/GMB, one per TfL
+  line), then join the normal 30-second refresh. This keeps the initial
+  load to the Hong Kong feeds you look at first.
 - Shows the next 3 buses for each saved stop, with a large countdown and
   the actual arrival clock time with seconds underneath (e.g. `12 min`
   above `21:48:30`).

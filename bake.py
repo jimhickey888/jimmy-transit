@@ -420,10 +420,10 @@ def main():
 
     pages = [
         {"id": "citybus", "title": "Citybus", "api": "ctb", "routes": citybus},
-        {"id": "kmb", "title": "KMB", "api": "kmb", "routes": kmb},
-        {"id": "minibus", "title": "Minibuses", "api": "gmb", "routes": minibus},
         {"id": "segment", "title": "Taikoo", "subtitle": "↔ New Trend Plaza · both directions",
          "api": "segment", "directions": segment_directions},
+        {"id": "kmb", "title": "KMB", "api": "kmb", "routes": kmb},
+        {"id": "minibus", "title": "Minibuses", "api": "gmb", "routes": minibus},
         {"id": "london", "title": "London", "subtitle": "57 · 131 · 93 · London time",
          "api": "tfl", "routes": london,
          "stopOrder": ["Darlaston Road", "Wimbledon Station", "Francis Grove"]},

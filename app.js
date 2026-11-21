@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.1.1';
-const APP_BUILD = '22 Nov 2026, 02:28 HKT';
+const APP_VERSION = '2.2.0';
+const APP_BUILD = '22 Nov 2026, 02:43 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -63,6 +63,7 @@ const state = {
   page: 0,
   tracked: loadTracked(),
   prefs: loadPrefs(),
+  loaded: new Set(),   // pages whose data has been fetched at least once
   pills: new Map(),    // render-scoped id -> tapped arrival
   pillSeq: 0,
   beeps: {},
@@ -381,6 +382,46 @@ async function fetchSegment(direction, route) {
   }
 }
 
+/* Citybus and Taikoo load with the app; KMB, Minibuses and London fetch
+   their first data only when the page is swiped to, then refresh normally. */
+function pageIsEager(page) {
+  return page.api === 'ctb' || page.api === 'segment' || page.api === 'info';
+}
+
+function pageIsLoaded(page) {
+  return pageIsEager(page) || state.loaded.has(page.id);
+}
+
+function pageJobs(page) {
+  const jobs = new Map();
+  for (const route of page.routes) {
+    for (const stop of route.bookmarks) {
+      jobs.set(keyOf(page, route, stop), { page, route, stop });
+    }
+  }
+  const near = state.nearest.get(page.id);
+  if (near) {
+    jobs.set(keyOf(page, near.route, near.stop), { page, route: near.route, stop: near.stop });
+  }
+  return [...jobs.values()];
+}
+
+/* First visit: fetch just this page's stops, so the initial app load stays
+   limited to Citybus and Taikoo. */
+async function loadPage(page) {
+  if (!page || page.api === 'info' || pageIsLoaded(page)) return;
+  state.loaded.add(page.id);
+  renderPage(page);
+
+  const results = await Promise.allSettled(
+    pageJobs(page).map(({ page: owner, route, stop }) => fetchEta(owner, route, stop)),
+  );
+  if (results.some((result) => result.status === 'fulfilled')) {
+    state.lastUpdate = new Date();
+  }
+  render();
+}
+
 async function refresh(force = false) {
   if (state.busy) return;
   if (!force && state.lastUpdate && Date.now() - state.lastUpdate.getTime() < 5000) return;
@@ -394,6 +435,7 @@ async function refresh(force = false) {
   const jobs = new Map();
   const segmentJobs = [];
   for (const page of PAGES) {
+    if (!pageIsLoaded(page)) continue;
     if (page.api === 'segment') {
       for (const direction of page.directions) {
         for (const route of direction.routes) {
@@ -402,14 +444,9 @@ async function refresh(force = false) {
       }
       continue;
     }
-    for (const route of page.routes) {
-      for (const stop of route.bookmarks) {
-        jobs.set(keyOf(page, route, stop), { page, route, stop });
-      }
-    }
-    const near = state.nearest.get(page.id);
-    if (near) {
-      jobs.set(keyOf(page, near.route, near.stop), { page, route: near.route, stop: near.stop });
+    if (page.api === 'info') continue;
+    for (const [key, job] of new Map(pageJobs(page).map((item) => [keyOf(item.page, item.route, item.stop), item]))) {
+      jobs.set(key, job);
     }
   }
 
@@ -794,7 +831,9 @@ function infoHtml() {
     </section>
     <p class="info-note">
       Live arrivals from the Transport Department, data.gov.hk and TfL.
-      Pages: Citybus, KMB, Minibuses, Taikoo ↔ New Trend and London.
+      Pages: Citybus, Taikoo ↔ New Trend, KMB, Minibuses and London.
+      Citybus and Taikoo load with the app; KMB, Minibuses and London fetch
+      their first data when you swipe to them, then keep refreshing.
     </p>`;
 }
 
@@ -1421,6 +1460,8 @@ function syncChrome() {
     : [];
   document.getElementById('sub').textContent = page.subtitle || codes.join(' · ');
   document.title = `${page.title} · Jimmy Transit Tracker`;
+
+  if (!pageIsLoaded(page)) loadPage(page);
 
   const dots = document.querySelectorAll('.pdot');
   dots.forEach((dot, i) => {
