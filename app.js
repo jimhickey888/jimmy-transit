@@ -6,9 +6,10 @@
 const GMB_API = 'https://data.etagmb.gov.hk';
 const CTB_API = 'https://rt.data.gov.hk';
 const KMB_API = 'https://data.etabus.gov.hk/v1/transport/kmb';
+const TFL_API = 'https://api.tfl.gov.uk';
 
-const APP_VERSION = '1.4.1';
-const APP_BUILD = '21 Nov 2026, 22:26 HKT';
+const APP_VERSION = '1.5.0';
+const APP_BUILD = '21 Nov 2026, 23:00 HKT';
 
 PAGES.push({
   id: 'info',
@@ -37,6 +38,9 @@ function keyOf(page, route, stop) {
   }
   if (page.api === 'kmb') {
     return `kmb:${route.route}/${route.service_type}/${route.direction}/${stop.seq}`;
+  }
+  if (page.api === 'tfl') {
+    return `tfl:${route.line}/${route.towards}/${stop.stop_id}`;
   }
   return `ctb:${route.route}/${route.dirCode}/${stop.stop_id}`;
 }
@@ -68,17 +72,20 @@ function sortedEntries(list, now) {
     .sort((a, b) => a.m - b.m);
 }
 
-function fmtClock(date) {
-  return date.toLocaleTimeString('en-GB', {
+function fmtClock(date, timeZone) {
+  const options = {
     hour: '2-digit',
     minute: '2-digit',
+    second: '2-digit',
     hour12: false,
-  });
+  };
+  if (timeZone) options.timeZone = timeZone;
+  return date.toLocaleTimeString('en-GB', options);
 }
 
 function clockFrom(entry) {
   const t = Date.parse(entry && entry.timestamp);
-  return Number.isFinite(t) ? fmtClock(new Date(t)) : '';
+  return Number.isFinite(t) ? fmtClock(new Date(t), entry && entry.timeZone) : '';
 }
 
 function fmtTime(date) {
@@ -128,6 +135,28 @@ function ctbStopEta(stopId) {
 
   ctbStops.set(stopId, { at: now, promise });
   promise.catch(() => ctbStops.delete(stopId));
+  return promise;
+}
+
+/* TfL arrivals are per StopPoint. Several routes share the same stop, so
+   cache by stop ID for a few seconds to keep well under TfL's
+   unauthenticated rate limit. */
+const TFL_STOP_TTL = 8000;
+const tflStops = new Map(); // stop_id -> { at, promise }
+
+function tflStopArrivals(stopId) {
+  const now = Date.now();
+  const hit = tflStops.get(stopId);
+  if (hit && now - hit.at < TFL_STOP_TTL) return hit.promise;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  const promise = getJson(`${TFL_API}/StopPoint/${stopId}/Arrivals`, controller.signal)
+    .then((rows) => (Array.isArray(rows) ? rows : []))
+    .finally(() => clearTimeout(timer));
+
+  tflStops.set(stopId, { at: now, promise });
+  promise.catch(() => tflStops.delete(stopId));
   return promise;
 }
 
@@ -194,6 +223,30 @@ async function fetchEta(page, route, stop) {
     return;
   }
 
+  if (page.api === 'tfl') {
+    const rows = await tflStopArrivals(stop.stop_id);
+    const target = route.towards.toLowerCase();
+    const matched = rows
+      .filter((row) => row.lineName === route.line
+        && (row.destinationName || '').toLowerCase().includes(target)
+        && row.expectedArrival)
+      .sort((a, b) => Date.parse(a.expectedArrival) - Date.parse(b.expectedArrival));
+
+    const list = matched.map((row) => ({
+      timestamp: row.expectedArrival,
+      /* These are London buses; show London clock time even if the phone
+         is in another timezone. */
+      timeZone: 'Europe/London',
+      remarks: row.destinationName || '',
+      scheduled: false,
+    }));
+
+    state.etas.set(key, {
+      enabled: true, desc: '', dest: route.towards, list, at: Date.now(),
+    });
+    return;
+  }
+
   const rows = await ctbStopEta(stop.stop_id);
   /* Match on stop sequence rather than the direction flag: Citybus labels
      the direction inconsistently, but `seq` follows the route-stop list.
@@ -221,7 +274,10 @@ async function fetchEta(page, route, stop) {
 async function refresh(force = false) {
   if (state.busy) return;
   if (!force && state.lastUpdate && Date.now() - state.lastUpdate.getTime() < 5000) return;
-  if (force) ctbStops.clear();
+  if (force) {
+    ctbStops.clear();
+    tflStops.clear();
+  }
   state.busy = true;
   setBusy(true);
 
@@ -345,6 +401,9 @@ function etasHtml(page, route, stop) {
 
 function destHtml(page, route, stop) {
   if (page.api === 'gmb') return '';
+  if (page.api === 'tfl') {
+    return route.towards ? `<div class="stop-dest">→ ${esc(route.towards)}</div>` : '';
+  }
   const cached = state.etas.get(keyOf(page, route, stop));
   if (!cached || !cached.dest) return '';
   return `<div class="stop-dest">→ ${esc(cached.dest)}</div>`;
@@ -417,6 +476,9 @@ function sourceLine(page) {
   if (page.api === 'kmb') {
     return 'Real-time data from data.gov.hk<br>KMB';
   }
+  if (page.api === 'tfl') {
+    return 'Real-time data from TfL<br>London Buses';
+  }
   return 'Real-time data from data.gov.hk<br>Citybus';
 }
 
@@ -425,6 +487,7 @@ function infoHtml() {
     ['Minibuses (GMB)', 'https://data.etagmb.gov.hk/eta/route-stop/{route_id}/{route_seq}/{stop_seq}'],
     ['Citybus', 'https://rt.data.gov.hk/v1/transport/batch/stop-eta/CTB/{stop_id}'],
     ['KMB', 'https://data.etabus.gov.hk/v1/transport/kmb/eta/{stop_id}/{route}/{service_type}'],
+    ['London buses (TfL)', 'https://api.tfl.gov.uk/StopPoint/{stop_id}/Arrivals'],
   ];
 
   return `
@@ -444,8 +507,8 @@ function infoHtml() {
         </div>`).join('')}
     </section>
     <p class="info-note">
-      Live arrivals from the Transport Department and data.gov.hk.
-      Pages: Citybus, KMB and Minibuses.
+      Live arrivals from the Transport Department, data.gov.hk and TfL.
+      Pages: Citybus, KMB, Minibuses and London.
     </p>`;
 }
 
@@ -476,15 +539,17 @@ function renderPage(page) {
   let html = nearestHtml(page);
 
   for (const route of page.routes) {
+    const routeDesc = route.desc || `${route.orig} → ${route.dest}`;
     html += `
       <section class="route">
         <div class="route-head">
           <span class="badge">${esc(route.code)}</span>
-          <span class="route-desc">${esc(route.orig)} → ${esc(route.dest)}</span>
+          <span class="route-desc">${esc(routeDesc)}</span>
         </div>`;
 
     for (const stop of route.bookmarks) {
       const sharedClass = shared.has(stop.stop_id) ? ' shared' : '';
+      const seqHtml = page.api === 'tfl' ? '' : `<div class="stop-seq">Stop ${stop.seq}</div>`;
       html += `
         <article class="card${sharedClass}">
           <div class="card-top">
@@ -492,7 +557,7 @@ function renderPage(page) {
               <div class="stop-name">${esc(stop.name)}</div>
               ${destHtml(page, route, stop)}
             </div>
-            <div class="stop-seq">Stop ${stop.seq}</div>
+            ${seqHtml}
           </div>
           ${distanceHtml(route, stop)}
           <div class="etas">${etasHtml(page, route, stop)}</div>

@@ -1,8 +1,8 @@
 # Jimmy Bus Tracker
 
 A one-screen-per-page iPhone web app showing the next arrivals for the
-buses around Braemar Hill, in four swipeable pages: **Citybus**, **KMB**,
-**Minibuses** and **Info**.
+buses around Braemar Hill and in Wimbledon, London, in five swipeable
+pages: **Citybus**, **KMB**, **Minibuses**, **London** and **Info**.
 
 **Citybus** — routes **27**, **85**, **25A** and **25** (outbound):
 
@@ -29,14 +29,27 @@ buses around Braemar Hill, in four swipeable pages: **Citybus**, **KMB**,
 | 49M | 1 — Tin Hau Station Bus Terminus |
 | 49M | 3 — No. 39 Cloud View Road |
 
+**London** — TfL buses around Wimbledon:
+
+| Route | Direction | Stops |
+|-------|-----------|-------|
+| 57 | towards Kingston | South Wimbledon Station · Wimbledon Theatre · Wimbledon Station · Francis Grove · Darlaston Road |
+| 57 | towards Clapham Park | Fairfield Bus Station · Darlaston Road |
+| 131 | towards Kingston | South Wimbledon Station · Wimbledon Theatre · Wimbledon Station · Francis Grove · Darlaston Road |
+| 131 | towards Tooting Broadway | Fairfield Bus Station · Darlaston Road |
+| 93 | towards North Cheam | Wimbledon Village · Wimbledon Hill Road · Wimbledon Station |
+| 93 | towards Putney Bridge | Morden Road Tram Stop · South Wimbledon Station · Wimbledon Hill Road |
+
 **Info** — lists the live-data endpoints, app version and build date/time.
 
 Live data comes from the Transport Department's **eTA GMB** API
 (`data.etagmb.gov.hk`), the **Citybus** batch Stop-ETA API
-(`rt.data.gov.hk/v1/transport/batch/stop-eta/CTB/{stop_id}`) and the
+(`rt.data.gov.hk/v1/transport/batch/stop-eta/CTB/{stop_id}`), the
 **KMB** ETA API
-(`data.etabus.gov.hk/v1/transport/kmb/eta/{stop_id}/{route}/{service_type}`).
-No API key, no account, no backend.
+(`data.etabus.gov.hk/v1/transport/kmb/eta/{stop_id}/{route}/{service_type}`)
+and **TfL**'s StopPoint Arrivals API
+(`api.tfl.gov.uk/StopPoint/{stop_id}/Arrivals`). No API key, no account,
+no backend.
 
 Citybus's per-route ETA endpoint (`/v2/transport/citybus/eta/CTB/{route}/{stop}`)
 currently returns an empty list for every route, so the app uses the batch
@@ -47,11 +60,12 @@ poles serve more than one direction.
 
 ## What it does
 
-- Four pages — **Citybus**, **KMB**, **Minibuses** and **Info** — swipe
-  left/right to switch, or tap the dots next to the status line. Each page
-  keeps its own scroll position.
+- Five pages — **Citybus**, **KMB**, **Minibuses**, **London** and
+  **Info** — swipe left/right to switch, or tap the dots next to the status
+  line. Each page keeps its own scroll position.
 - Shows the next 3 buses for each saved stop, with a large countdown and
-  the actual arrival clock time underneath (e.g. `12 min` above `21:48`).
+  the actual arrival clock time with seconds underneath (e.g. `12 min`
+  above `21:48:30`).
 - Stops that appear under more than one route on the same page are given a
   matching lighter card background so the group stands out.
 - Citybus and KMB arrivals are colour-coded: green/grey entries are **live**
@@ -154,6 +168,8 @@ arriving soonest and labels it with that group's destination.
 - KMB labels scheduled rows explicitly in `rmk_en` as `Scheduled Bus`; the
   app shows those in the same blue style. Only the normal 108 (service
   type 1) is tracked, in the directions shown above.
+- London arrivals come from TfL's StopPoint API and their clock times are
+  shown in London time (`Europe/London`), whatever the phone's timezone.
 - The distance on each card is the straight-line distance (“as the crow
   flies”) from your last known position, shown only when location access is
   allowed. It is not a routed walking path and needs no extra map service.

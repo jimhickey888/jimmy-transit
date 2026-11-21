@@ -1,7 +1,7 @@
 {
   "name": "Jimmy Bus Tracker",
   "short_name": "Jimmy Bus Tracker",
-  "description": "Live arrivals for buses around Braemar Hill, Hong Kong.",
+  "description": "Live arrivals for buses around Braemar Hill, Hong Kong, and Wimbledon, London.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
