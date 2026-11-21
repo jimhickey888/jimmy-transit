@@ -401,18 +401,6 @@ h1 {
 
 .eta.first.due small { color: #fff; }
 
-/* Projected when Citybus publishes fewer than three live times. */
-.eta.est {
-  background: none;
-  border: 1px dashed var(--dot);
-  padding: 2px 7px 3px;
-  color: var(--muted);
-}
-
-.eta.est b { font-weight: 650; }
-
-.eta.est small { color: var(--muted); }
-
 .empty {
   font-size: 14px;
   color: var(--muted);

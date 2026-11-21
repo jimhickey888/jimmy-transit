@@ -227,46 +227,16 @@ function startGeolocation() {
 
 /* ---------------- rendering ---------------- */
 
-const MIN_ESTIMATE_GAP = 5;
-
-/* Citybus publishes at most three live ETAs, and sometimes only two.
-   When it stops short, project the remaining arrival(s) from the gap
-   between the published ones. These are estimates, not timetable data,
-   so they come after every live entry and get their own style. */
-function projectArrivals(minutes) {
-  const shown = minutes.slice(0, MAX_ETAS).map((m) => ({ m, estimate: false }));
-  if (shown.length < 2 || shown.length >= MAX_ETAS) return shown;
-
-  const gap = Math.max(
-    MIN_ESTIMATE_GAP,
-    shown[shown.length - 1].m - shown[shown.length - 2].m,
-  );
-  let next = shown[shown.length - 1].m;
-
-  while (shown.length < MAX_ETAS) {
-    next += gap;
-    shown.push({ m: next, estimate: true });
-  }
-  return shown;
-}
-
 function etasHtml(page, route, stop) {
   const cached = state.etas.get(keyOf(page, route, stop));
 
   if (!cached) return '<span class="empty">Loading…</span>';
   if (!cached.enabled) return `<span class="empty">${esc(cached.desc || 'Not available')}</span>`;
 
-  const minutes = sortedMinutes(cached.list, Date.now());
+  const minutes = sortedMinutes(cached.list, Date.now()).slice(0, MAX_ETAS);
   if (!minutes.length) return '<span class="empty">No arrivals right now</span>';
 
-  const entries = page.api === 'ctb'
-    ? projectArrivals(minutes)
-    : minutes.slice(0, MAX_ETAS).map((m) => ({ m, estimate: false }));
-
-  return entries.map(({ m, estimate }, i) => {
-    if (estimate) {
-      return `<span class="eta est" title="Estimated from the gap between live arrivals"><b>~${m}</b><small>min</small></span>`;
-    }
+  return minutes.map((m, i) => {
     const first = i === 0 ? ' first' : '';
     if (m <= 0) return `<span class="eta${first} due">Due</span>`;
     return `<span class="eta${first}"><b>${m}</b><small>min</small></span>`;
