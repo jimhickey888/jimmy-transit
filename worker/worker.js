@@ -234,6 +234,15 @@ async function storeAlert(env, subscription, alert) {
 
 /* ---------------- cron ---------------- */
 
+async function retryOrDrop(env, keyName, record) {
+  record.attempts = (record.attempts || 0) + 1;
+  if (record.attempts >= 5) {
+    await env.ALERTS.delete(keyName);
+  } else {
+    await env.ALERTS.put(keyName, JSON.stringify(record), { expirationTtl: 3600 });
+  }
+}
+
 export async function sendDueAlerts(env) {
   const now = Date.now();
   const vapid = vapidConfig(env);
@@ -253,34 +262,36 @@ export async function sendDueAlerts(env) {
         continue;
       }
 
-      const subscription = await env.ALERTS.get(`sub:${record.subId}`, 'json');
-      if (!subscription) {
-        await env.ALERTS.delete(key.name);
-        continue;
-      }
+      /* One malformed subscription must not block every other alert. */
+      try {
+        const subscription = await env.ALERTS.get(`sub:${record.subId}`, 'json');
+        if (!subscription) {
+          await env.ALERTS.delete(key.name);
+          continue;
+        }
 
-      const result = await sendPush(subscription, {
-        title: record.title,
-        body: record.body,
-        tag: record.tag,
-        url: './',
-      }, vapid);
+        const result = await sendPush(subscription, {
+          title: record.title,
+          body: record.body,
+          tag: record.tag,
+          url: './',
+        }, vapid);
 
-      if (result.ok) {
-        sent += 1;
-        await env.ALERTS.delete(key.name);
-      } else if (result.status === 404 || result.status === 410) {
-        failed += 1;
-        await env.ALERTS.delete(`sub:${record.subId}`);
-        await env.ALERTS.delete(key.name);
-      } else {
-        failed += 1;
-        record.attempts = (record.attempts || 0) + 1;
-        if (record.attempts >= 5) {
+        if (result.ok) {
+          sent += 1;
+          await env.ALERTS.delete(key.name);
+        } else if (result.status === 404 || result.status === 410) {
+          failed += 1;
+          await env.ALERTS.delete(`sub:${record.subId}`);
           await env.ALERTS.delete(key.name);
         } else {
-          await env.ALERTS.put(key.name, JSON.stringify(record), { expirationTtl: 3600 });
+          failed += 1;
+          await retryOrDrop(env, key.name, record);
         }
+      } catch (error) {
+        console.error('alert failed', key.name, error);
+        failed += 1;
+        await retryOrDrop(env, key.name, record);
       }
     }
     cursor = listed.list_complete ? null : listed.cursor;
@@ -334,6 +345,49 @@ export default {
     if (url.pathname === '/alerts') {
       const listed = await env.ALERTS.list({ prefix: 'alert:' });
       return json({ count: listed.keys.length, alerts: MAX_ALERTS }, 200, origin);
+    }
+
+    /* Diagnostics: shows which settings are present and whether a VAPID
+       signature can be produced, without exposing any secret values. */
+    if (url.pathname === '/selftest') {
+      const report = {
+        alertsBinding: Boolean(env.ALERTS),
+        vapidPrivateJwk: Boolean(env.VAPID_PRIVATE_JWK),
+        vapidPublicKey: Boolean(env.VAPID_PUBLIC_KEY),
+        vapidSubject: Boolean(env.VAPID_SUBJECT),
+        publicKeyLength: (env.VAPID_PUBLIC_KEY || '').length,
+        now: Date.now(),
+      };
+      try {
+        vapidConfig(env);
+        const headers = await vapidHeaders(
+          'https://web.push.apple.com/probe',
+          JSON.parse(env.VAPID_PRIVATE_JWK),
+          env.VAPID_PUBLIC_KEY,
+          env.VAPID_SUBJECT,
+        );
+        report.vapidSigns = String(headers.Authorization || '').startsWith('vapid t=');
+      } catch (error) {
+        report.vapidSigns = false;
+        report.error = String(error && error.message ? error.message : error);
+      }
+      try {
+        const listed = await env.ALERTS.list({ prefix: 'alert:' });
+        report.alerts = listed.keys.length;
+      } catch (error) {
+        report.error = String(error && error.message ? error.message : error);
+      }
+      return json(report, 200, origin);
+    }
+
+    /* Runs the same scan as the cron, to check sending without waiting. */
+    if (url.pathname === '/run' && request.method === 'POST') {
+      try {
+        const result = await sendDueAlerts(env);
+        return json({ ok: true, ...result }, 200, origin);
+      } catch (error) {
+        return json({ ok: false, error: String(error && error.message ? error.message : error) }, 500, origin);
+      }
     }
 
     return json({ error: 'not found' }, 404, origin);

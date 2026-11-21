@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.0.1';
-const APP_BUILD = '22 Nov 2026, 01:40 HKT';
+const APP_VERSION = '2.0.2';
+const APP_BUILD = '22 Nov 2026, 02:00 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -1246,11 +1246,19 @@ async function armAlert() {
     return;
   }
 
-  const permission = Notification.permission === 'granted'
+  const permissionGranted = Notification.permission === 'granted';
+  const permission = permissionGranted
     ? 'granted'
     : await Notification.requestPermission();
   if (permission !== 'granted') {
     flashChip('Alerts not allowed');
+    return;
+  }
+
+  /* iOS ties push subscriptions to a tap; after a fresh permission prompt
+     ask for one more tap so subscribe() runs inside its own gesture. */
+  if (!permissionGranted) {
+    flashChip('Tap again to enable alerts');
     return;
   }
 

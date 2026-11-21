@@ -7,6 +7,9 @@ and a one-minute cron trigger. The app itself stays static on GitHub Pages.
 - `POST /alert` — store a subscription and one scheduled alert
 - `DELETE /alert?id=…` — cancel an alert
 - `GET /health` — liveness check
+- `GET /selftest` — shows which settings are present and whether a VAPID
+  signature can be produced (no secret values are returned)
+- `POST /run` — runs the same scan as the cron, without waiting for it
 - cron `* * * * *` — send anything that is due, then delete it
 
 Payloads are encrypted with RFC 8291 (`aes128gcm`) and signed with RFC 8292
