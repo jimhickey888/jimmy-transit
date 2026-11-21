@@ -1,7 +1,7 @@
 {
-  "name": "Minibus 25 & 49M",
-  "short_name": "25 · 49M",
-  "description": "Live arrivals for Hong Kong green minibus routes 25 and 49M.",
+  "name": "Bus Times",
+  "short_name": "Bus Times",
+  "description": "Live arrivals for Hong Kong minibus 25 & 49M and Citybus 25, 25A, 27 and 85.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

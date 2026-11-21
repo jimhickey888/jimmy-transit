@@ -1,6 +1,6 @@
 /* App-shell cache. Live ETA requests always go to the network. */
 
-const CACHE = 'minibus-2549-v4';
+const CACHE = 'bus-times-v5';
 const SHELL = [
   './',
   './index.html',

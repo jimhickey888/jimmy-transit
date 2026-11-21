@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>25 · 49M</title>
-  <meta name="description" content="Live arrivals for Hong Kong minibus routes 25 and 49M.">
+  <title>Bus Times</title>
+  <meta name="description" content="Live arrivals for Hong Kong minibus 25 & 49M and Citybus 25, 25A, 27 and 85.">
   <meta name="theme-color" content="#0b7a45">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="25 · 49M">
+  <meta name="apple-mobile-web-app-title" content="Bus Times">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" href="icons/icon-192.png">
@@ -18,9 +18,9 @@
 <body>
   <div id="app">
     <header class="top">
-      <div>
-        <h1>25 · 49M</h1>
-        <p class="sub">Live minibus arrivals</p>
+      <div class="titles">
+        <h1 id="title">Minibuses</h1>
+        <p class="sub" id="sub">25 · 49M</p>
       </div>
       <button id="refresh" class="refresh" type="button" aria-label="Refresh arrivals">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
@@ -34,15 +34,10 @@
     <div class="statusline">
       <span id="dot" class="dot"></span>
       <span id="updated" aria-live="polite">Connecting…</span>
+      <nav id="pdots" class="pdots" aria-label="Pages"></nav>
     </div>
 
-    <div id="nearest" class="nearest" hidden></div>
-
-    <main id="routes"></main>
-
-    <footer class="foot">
-      <p>Real-time data from the Transport Department<br>eTA GMB service</p>
-    </footer>
+    <div id="pager" class="pager"></div>
   </div>
 
   <script src="data.js"></script>

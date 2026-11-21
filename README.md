@@ -1,8 +1,9 @@
-# Minibus 25 · 49M
+# Bus Times
 
-A one-screen iPhone web app that shows the next arrivals for Hong Kong
-green minibus routes **25** (Upper Braemar Hill ↔ Causeway Bay) and
-**49M** (Tin Hau Station ↔ Braemar Hill) at four saved stops:
+A one-screen-per-page iPhone web app showing the next arrivals for the
+buses around Braemar Hill, in two swipeable pages.
+
+**Minibuses** — green minibus **25** and **49M**:
 
 | Route | Stop |
 |-------|------|
@@ -11,15 +12,29 @@ green minibus routes **25** (Upper Braemar Hill ↔ Causeway Bay) and
 | 49M | 1 — Tin Hau Station Bus Terminus |
 | 49M | 3 — No. 39 Cloud View Road |
 
+**Citybus** — routes **27**, **85**, **25A** and **25** (outbound):
+
+| Route | Stops |
+|-------|-------|
+| 27 | 4 — New Trend Plaza, King's Road |
+| 85 | 23 Taikoo Place · 30 New Trend Plaza · 36 Hanking Court (Cloud View Rd) · 41 Kiangsu-Chekiang College (Braemar Hill Rd) |
+| 25A | 1 — Exhibition Centre Station · 23 — Flora Garden, Cloud View Road |
+| 25 | 1 — Central Ferry, Man Kwong Street · 31 — Flora Garden, Cloud View Road |
+
 Live data comes from the Transport Department's **eTA GMB** API
-(`data.etagmb.gov.hk`). No API key, no account, no backend.
+(`data.etagmb.gov.hk`) and the **Citybus** API (`rt.data.gov.hk`). No API
+key, no account, no backend.
 
 ## What it does
 
+- Two pages — **Minibuses** and **Citybus** — swipe left/right to switch,
+  or tap the dots next to the status line. Each page keeps its own scroll
+  position.
 - Shows the next 3 buses for each saved stop, in minutes.
 - Refreshes every 30 seconds while the screen is open.
-- Uses your location to highlight the nearest minibus stop in a strip
-  at the top. Location is optional — the four saved stops always work.
+- Uses your location to highlight the nearest stop *on the page you are
+  looking at* in a strip at the top. Location is optional — the saved
+  stops always work.
 - Installable to the Home Screen; runs full-screen with its own icon.
 - Works in light and dark mode.
 
@@ -31,14 +46,14 @@ python3 -m http.server 8000
 ```
 
 Then open <http://localhost:8000>. (A server is needed because browsers
-block JavaScript modules and service workers on `file://`.)
+block service workers on `file://`.)
 
 ## Put it on the iPhone
 
 The app needs to be served over **HTTPS** for the Home Screen install and
-for location access. Any static host works; the whole app is five files.
+for location access. Any static host works.
 
-### Option A — GitHub Pages (free, permanent)
+### GitHub Pages
 
 1. Create a new repository, e.g. `minibus-2549`.
 2. Upload everything in this folder (not the folder itself).
@@ -48,53 +63,50 @@ for location access. Any static host works; the whole app is five files.
    iPhone.
 5. Tap **Share → Add to Home Screen**.
 
-### Option B — Cloudflare Pages / Netlify
+### Cloudflare Pages / Netlify
 
 Drag this folder onto Cloudflare Pages or Netlify. Both give an HTTPS URL
 immediately; no build command, no output directory (it is a static site).
 
-### Option C — quick test from this Mac
-
-While the Mac is awake, a tunnel gives a temporary HTTPS URL:
-
-```sh
-cloudflared tunnel --url http://localhost:8000
-```
-
-Open the printed `https://…trycloudflare.com` URL on the phone. The URL
-dies when the tunnel stops, so this is only for testing.
-
 ## Changing the saved stops
 
-The four stops are defined in `bake.py`. Change the `bookmarks` lists
-(stop sequence numbers), then rebuild the static data:
+The stops are defined in `bake.py`, in two lists:
+
+- `MINIBUS_ROUTES` — `bookmarks` are minibus stop sequence numbers.
+- `CITYBUS_ROUTES` — `direction` is `outbound` or `inbound`, and
+  `bookmarks` are stop sequence numbers in that direction.
+
+Change the numbers, then rebuild the static data:
 
 ```sh
 python3 bake.py
 ```
 
-The script prints nothing else and rewrites `data.js`. No other file needs
-to change.
+The script rewrites `data.js` and prints what it saved for each route.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `index.html` | The single screen |
-| `styles.css` | iOS-style light/dark theme |
-| `app.js` | Fetching, nearest-stop logic, rendering |
+| `index.html` | The app shell: header, status line, page dots, pager |
+| `styles.css` | iOS-style light/dark theme, pager and cards |
+| `app.js` | Fetching, paging, nearest-stop logic, rendering |
 | `data.js` | Generated route and stop data (names + coordinates) |
-| `bake.py` | Regenerates `data.js` from the government API |
+| `bake.py` | Regenerates `data.js` from the two government APIs |
 | `manifest.json` | Home Screen install metadata |
 | `sw.js` | Caches the app shell so it opens instantly |
 | `icons/` | App icons |
 
 ## Notes and limits
 
-- The API publishes **arrival times**, not vehicle GPS positions. The app
-  shows minutes to your stop; it does not draw the bus on a map.
-- Outside service hours the API returns an empty list, and the cards show
-  “No arrivals right now”. Route 25 runs roughly 06:20–23:40.
+- Both APIs publish **arrival times**, not vehicle GPS positions. The app
+  shows minutes to each stop; it does not draw buses on a map.
+- Outside service hours the feeds return empty lists and the cards show
+  “No arrivals right now”.
+- Citybus stops are shown for the **outbound** direction only.
+- If every Citybus card is empty for a long stretch during service hours,
+  the Citybus feed itself is down; it usually recovers without a change
+  here. The minibus page is unaffected.
 - 49M also has a rarely-used “Po Luen Path” detour variant; this app shows
   the normal route only.
-- Stop names come from the government feed and are in English.
+- Stop names come from the government feeds and are in English.

@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""Rebuild data.js from the Transport Department eTA GMB API.
+"""Rebuild data.js from the official Hong Kong bus APIs.
 
-Run this if a route changes its stops, or if you want different
-bookmarked stops. Requires only the Python standard library.
+Covers the Minibuses page (green minibus 25 and 49M, Transport Department
+eTA GMB API) and the Citybus page (Citybus 25, 25A, 27 and 85,
+data.gov.hk Citybus API).
+
+Run this if a route changes its stops, or if you want different bookmarked
+stops. Requires only the Python standard library.
 
     python3 bake.py
 """
@@ -12,11 +16,12 @@ import pathlib
 import urllib.request
 import concurrent.futures
 
-BASE = "https://data.etagmb.gov.hk"
+GMB = "https://data.etagmb.gov.hk"
+CTB = "https://rt.data.gov.hk/v2/transport/citybus"
 
-# Edit these to change the saved stops. `bookmarks` are stop_seq numbers
-# (1-based) from the route's stop list.
-ROUTES = [
+# --- Minibuses page -------------------------------------------------------
+# `bookmarks` are stop_seq numbers (1-based) from the route's stop list.
+MINIBUS_ROUTES = [
     {
         "code": "25",
         "route_id": 2002020,
@@ -35,42 +40,79 @@ ROUTES = [
     },
 ]
 
+# --- Citybus page ---------------------------------------------------------
+# `direction` is outbound/inbound; `bookmarks` are stop_seq numbers in that
+# direction.
+CITYBUS_ROUTES = [
+    {"code": "27", "direction": "outbound", "bookmarks": [4]},
+    {"code": "85", "direction": "outbound", "bookmarks": [23, 30, 36, 41]},
+    {"code": "25A", "direction": "outbound", "bookmarks": [23, 1]},
+    {"code": "25", "direction": "outbound", "bookmarks": [31, 1]},
+]
 
-def get(path):
+DIR_CODES = {"outbound": "O", "inbound": "I"}
+
+
+def get(url):
     req = urllib.request.Request(
-        BASE + path,
-        headers={"Accept": "application/json", "User-Agent": "curl/8"},
+        url, headers={"Accept": "application/json", "User-Agent": "curl/8"}
     )
-    with urllib.request.urlopen(req, timeout=20) as response:
+    with urllib.request.urlopen(req, timeout=25) as response:
         return json.load(response)
 
 
-def fetch_route(route):
-    data = get(f"/route-stop/{route['route_id']}/{route['route_seq']}")
+# --- minibus helpers ------------------------------------------------------
+
+
+def gmb_route_stops(route):
+    data = get(f"{GMB}/route-stop/{route['route_id']}/{route['route_seq']}")
     return route, data["data"]["route_stops"]
 
 
-def fetch_stop(stop_id):
-    data = get(f"/stop/{stop_id}")["data"]
+def gmb_stop(stop_id):
+    data = get(f"{GMB}/stop/{stop_id}")["data"]
     wgs = data["coordinates"]["wgs84"]
     return stop_id, {"lat": wgs["latitude"], "lon": wgs["longitude"]}
 
 
+# --- citybus helpers ------------------------------------------------------
+
+
+def ctb_names():
+    data = get(f"{CTB}/route/CTB")["data"]
+    names = {}
+    for item in data:
+        names.setdefault(item["route"], (item["orig_en"], item["dest_en"]))
+    return names
+
+
+def ctb_route_stops(route):
+    stops = get(f"{CTB}/route-stop/CTB/{route['code']}/{route['direction']}")["data"]
+    return route, stops
+
+
+def ctb_stop(stop_id):
+    data = get(f"{CTB}/stop/{stop_id}")["data"]
+    return stop_id, {"lat": float(data["lat"]), "lon": float(data["long"]),
+                     "name": data["name_en"]}
+
+
 def main():
+    # Minibuses ------------------------------------------------------------
     collected = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        for route, stops in pool.map(fetch_route, ROUTES):
+        for route, stops in pool.map(gmb_route_stops, MINIBUS_ROUTES):
             collected.append((route, stops))
 
-    stop_ids = sorted({s["stop_id"] for _, stops in collected for s in stops})
-    coords = {}
+    gmb_stop_ids = sorted({s["stop_id"] for _, stops in collected for s in stops})
+    gmb_coords = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-        for stop_id, point in pool.map(fetch_stop, stop_ids):
-            coords[stop_id] = point
+        for stop_id, point in pool.map(gmb_stop, gmb_stop_ids):
+            gmb_coords[stop_id] = point
 
-    routes = []
+    minibus = []
     for route, stops in collected:
-        routes.append({
+        minibus.append({
             "code": route["code"],
             "route_id": route["route_id"],
             "route_seq": route["route_seq"],
@@ -85,18 +127,70 @@ def main():
                     "seq": s["stop_seq"],
                     "stop_id": s["stop_id"],
                     "name": s["name_en"],
-                    "lat": coords[s["stop_id"]]["lat"],
-                    "lon": coords[s["stop_id"]]["lon"],
+                    "lat": gmb_coords[s["stop_id"]]["lat"],
+                    "lon": gmb_coords[s["stop_id"]]["lon"],
                 }
                 for s in stops
             ],
         })
 
-    body = "// Generated from data.etagmb.gov.hk — static route geometry.\n"
-    body += "const ROUTES = " + json.dumps(routes, indent=2, ensure_ascii=False) + ";\n"
+    # Citybus --------------------------------------------------------------
+    names = ctb_names()
+    ctb_collected = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        for route, stops in pool.map(ctb_route_stops, CITYBUS_ROUTES):
+            ctb_collected.append((route, stops))
+
+    ctb_stop_ids = sorted({s["stop"] for _, stops in ctb_collected for s in stops})
+    ctb_coords = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        for stop_id, point in pool.map(ctb_stop, ctb_stop_ids):
+            ctb_coords[stop_id] = point
+
+    citybus = []
+    for route, stops in ctb_collected:
+        orig, dest = names.get(route["code"], ("", ""))
+        citybus.append({
+            "code": route["code"],
+            "route": route["code"],
+            "direction": route["direction"],
+            "dirCode": DIR_CODES[route["direction"]],
+            "orig": orig,
+            "dest": dest,
+            "bookmarks": [
+                {"seq": s["seq"], "stop_id": s["stop"], "name": ctb_coords[s["stop"]]["name"]}
+                for s in stops if s["seq"] in route["bookmarks"]
+            ],
+            "stops": [
+                {
+                    "seq": s["seq"],
+                    "stop_id": s["stop"],
+                    "name": ctb_coords[s["stop"]]["name"],
+                    "lat": ctb_coords[s["stop"]]["lat"],
+                    "lon": ctb_coords[s["stop"]]["lon"],
+                }
+                for s in stops
+            ],
+        })
+
+    pages = [
+        {"id": "minibus", "title": "Minibuses", "api": "gmb", "routes": minibus},
+        {"id": "citybus", "title": "Citybus", "api": "ctb", "routes": citybus},
+    ]
+
+    body = "// Generated by bake.py from data.etagmb.gov.hk and rt.data.gov.hk.\n"
+    body += "const PAGES = " + json.dumps(pages, indent=2, ensure_ascii=False) + ";\n"
     out = pathlib.Path(__file__).with_name("data.js")
     out.write_text(body, encoding="utf-8")
     print(f"wrote {out}")
+
+    for page in pages:
+        print(page["title"])
+        for route in page["routes"]:
+            print(
+                f"  {route['code']:<4} {len(route['stops']):>2} stops;",
+                [(b["seq"], b["name"]) for b in route["bookmarks"]],
+            )
 
 
 if __name__ == "__main__":
