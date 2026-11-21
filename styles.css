@@ -867,10 +867,13 @@ h1 {
   line-height: 1.25;
 }
 
+.call-age,
 .call-date {
   font-size: 10px;
-  opacity: 0.85;
+  font-weight: 500;
 }
+
+.call-date { opacity: 0.75; }
 
 .call-foot {
   color: var(--muted);

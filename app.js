@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.5.2';
-const APP_BUILD = '22 Nov 2026, 03:31 HKT';
+const APP_VERSION = '2.5.3';
+const APP_BUILD = '22 Nov 2026, 03:32 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -936,6 +936,24 @@ function segmentHtml(page) {
   return html;
 }
 
+function relativeAge(ms) {
+  const minutes = Math.floor(Math.max(0, Date.now() - ms) / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? '1 day ago' : `${days} days ago`;
+}
+
+/* Keep the relative ages fresh while the Info page is on screen. */
+function refreshAges() {
+  for (const el of document.querySelectorAll('#body-info .call-age[data-last]')) {
+    const last = Number(el.dataset.last);
+    if (Number.isFinite(last)) el.textContent = relativeAge(last);
+  }
+}
+
 /* Time of day, plus a short date when the call was not made today. */
 function callTimeParts(ms) {
   const when = new Date(ms);
@@ -956,7 +974,9 @@ function callsHtml() {
     const last = (total && total.last) || (session && session.last);
     const when = last ? callTimeParts(last) : null;
     const timeHtml = when
-      ? `<span>${esc(when.time)}</span>${when.day ? `<span class="call-date">${esc(when.day)}</span>` : ''}`
+      ? `<span>${esc(when.time)}</span>`
+        + `<span class="call-age" data-last="${last}">${esc(relativeAge(last))}</span>`
+        + (when.day ? `<span class="call-date">${esc(when.day)}</span>` : '')
       : '—';
     return `<div class="call-row"><span class="call-name">${esc(label)}</span>`
       + `<strong>${session ? session.count : 0}</strong>`
@@ -1869,6 +1889,10 @@ function init() {
   setInterval(() => {
     if (document.visibilityState === 'visible') refresh();
   }, REFRESH_MS);
+
+  setInterval(() => {
+    if (document.visibilityState === 'visible') refreshAges();
+  }, 30000);
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
