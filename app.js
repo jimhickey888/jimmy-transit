@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.4.1';
-const APP_BUILD = '22 Nov 2026, 03:14 HKT';
+const APP_VERSION = '2.5.0';
+const APP_BUILD = '22 Nov 2026, 03:20 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -25,6 +25,7 @@ const IN_APP_MARKS = [600, 480, 360, 240, 120, 0];
 const TRACK_KEY = 'jimmy.tracked.v1';
 const PREFS_KEY = 'jimmy.prefs.v1';
 const SNAP_KEY = 'jimmy.snapshot.v1';
+const CALLS_KEY = 'jimmy.calls.v1';
 const PAGE_KEY = 'jimmy.page.v1';
 /* How long the last good arrivals are accepted as a first paint. */
 const SNAP_MAX_AGE = 15 * 60 * 1000;
@@ -73,7 +74,9 @@ const state = {
   pageUpdated: new Map(), // page id -> last successful page fetch
   fromCache: false,    // painting the snapshot while the first refresh runs
   savedPage: -1,
-  calls: new Map(),    // API label -> { count, last }
+  tabShown: -1,
+  calls: new Map(),        // API label -> { count, last } this launch
+  installCalls: new Map(), // API label -> { count, last } since install
   pills: new Map(),    // render-scoped id -> tapped arrival
   pillSeq: 0,
   beeps: {},
@@ -174,12 +177,49 @@ const API_LABELS = {
 const PUSH_LABEL = 'Push alerts';
 const API_ROWS = ['Citybus', 'KMB', 'Minibuses', 'London (TfL)', PUSH_LABEL];
 
-/* Per-session request counters for the Info page. */
+/* Request counters for the Info page: one set for this launch, one kept in
+   localStorage for the lifetime of the install. */
+let callsSaveTimer = null;
+
+function flushInstallCalls() {
+  try {
+    localStorage.setItem(CALLS_KEY, JSON.stringify({
+      at: Date.now(),
+      calls: [...state.installCalls.entries()],
+    }));
+  } catch { /* ignore */ }
+}
+
+function saveInstallCalls() {
+  clearTimeout(callsSaveTimer);
+  callsSaveTimer = setTimeout(flushInstallCalls, 800);
+}
+
+function loadInstallCalls() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CALLS_KEY) || 'null');
+    if (!saved || !Array.isArray(saved.calls)) return;
+    for (const [label, value] of saved.calls) {
+      if (value && Number.isFinite(value.count)) {
+        state.installCalls.set(label, { count: value.count, last: value.last || null });
+      }
+    }
+  } catch { /* corrupt storage */ }
+}
+
 function noteApiCall(label) {
-  const entry = state.calls.get(label) || { count: 0, last: null };
-  entry.count += 1;
-  entry.last = Date.now();
-  state.calls.set(label, entry);
+  const now = Date.now();
+
+  const session = state.calls.get(label) || { count: 0, last: null };
+  session.count += 1;
+  session.last = now;
+  state.calls.set(label, session);
+
+  const total = state.installCalls.get(label) || { count: 0, last: null };
+  total.count += 1;
+  total.last = now;
+  state.installCalls.set(label, total);
+  saveInstallCalls();
 }
 
 async function getJson(url, signal) {
@@ -497,6 +537,22 @@ function maybeRefreshPage(page) {
   const at = state.pageUpdated.get(page.id) || 0;
   if (Date.now() - at < PAGE_STALE_MS) return;
   fetchPage(page);
+}
+
+let activateTimer = null;
+
+function activateCurrentPage() {
+  const page = PAGES[state.page];
+  if (!page) return;
+  if (!pageIsLoaded(page)) loadPage(page);
+  else maybeRefreshPage(page);
+}
+
+/* Wait for the swipe (or tab jump) to settle so passing over pages on the
+   way does not fetch each one. */
+function scheduleActivation() {
+  clearTimeout(activateTimer);
+  activateTimer = setTimeout(activateCurrentPage, 150);
 }
 
 /* Only the page on screen polls. Nothing refreshes in the background. */
@@ -882,30 +938,40 @@ function segmentHtml(page) {
 
 function callsHtml() {
   const rows = API_ROWS.map((label) => {
-    const entry = state.calls.get(label);
-    const count = entry ? entry.count : 0;
-    const last = entry && entry.last ? fmtTime(new Date(entry.last)) : '—';
-    return `<div class="call-row"><span>${esc(label)}</span>`
-      + `<strong>${count}</strong>`
-      + `<span class="call-time">${esc(last)}</span></div>`;
+    const session = state.calls.get(label);
+    const total = state.installCalls.get(label);
+    const last = (total && total.last) || (session && session.last);
+    return `<div class="call-row"><span class="call-name">${esc(label)}</span>`
+      + `<strong>${session ? session.count : 0}</strong>`
+      + `<strong>${total ? total.count : 0}</strong>`
+      + `<span class="call-time">${last ? esc(fmtTime(new Date(last))) : '—'}</span></div>`;
   }).join('');
 
-  const total = API_ROWS.reduce((sum, label) => {
-    const entry = state.calls.get(label);
-    return sum + (entry ? entry.count : 0);
+  const sum = (map) => API_ROWS.reduce((n, label) => {
+    const entry = map.get(label);
+    return n + (entry ? entry.count : 0);
   }, 0);
 
   return `
     <section class="info-block">
-      <h2>API calls since launch</h2>
+      <h2>API calls</h2>
       <div class="info-card calls">
-        <div class="call-row call-head"><span>API</span><span>Calls</span><span>Last call</span></div>
+        <div class="call-row call-head">
+          <span class="call-name">API</span><span>Launch</span><span>Install</span><span>Last call</span>
+        </div>
         ${rows}
+        <div class="call-row call-foot">
+          <span class="call-name">Total</span>
+          <strong>${sum(state.calls)}</strong>
+          <strong>${sum(state.installCalls)}</strong>
+          <span class="call-time"></span>
+        </div>
       </div>
       <p class="info-note">
-        Counts reset when the app is closed or reloaded. Only real network
-        requests are counted, so cache hits are free. Times are device local.
-        Total this session: <strong>${total}</strong>.
+        <strong>Launch</strong> counts reset when the app is closed or
+        reloaded. <strong>Install</strong> counts are stored on this device
+        and survive relaunches; they reset only if website data is cleared.
+        Cache hits are not counted. Times are device local.
       </p>
     </section>`;
 }
@@ -1633,8 +1699,7 @@ function syncChrome() {
   document.getElementById('sub').textContent = page.subtitle || codes.join(' · ');
   document.title = `${page.title} · Jimmy Transit Tracker`;
 
-  if (!pageIsLoaded(page)) loadPage(page);
-  else maybeRefreshPage(page);
+  scheduleActivation();
 
   if (state.savedPage !== state.page) {
     state.savedPage = state.page;
@@ -1643,12 +1708,22 @@ function syncChrome() {
     if (page.api === 'info') renderPage(page);
   }
 
-  const dots = document.querySelectorAll('.pdot');
-  dots.forEach((dot, i) => {
-    dot.classList.toggle('on', i === state.page);
-    if (i === state.page) dot.setAttribute('aria-current', 'page');
-    else dot.removeAttribute('aria-current');
+  const tabs = document.querySelectorAll('.tab');
+  tabs.forEach((tab, i) => {
+    const active = i === state.page;
+    tab.classList.toggle('on', active);
+    tab.setAttribute('aria-selected', active ? 'true' : 'false');
   });
+
+  if (state.tabShown !== state.page) {
+    state.tabShown = state.page;
+    const nav = document.getElementById('tabs');
+    const activeTab = nav && nav.children[state.page];
+    if (nav && activeTab) {
+      const left = activeTab.offsetLeft - (nav.clientWidth - activeTab.clientWidth) / 2;
+      nav.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+    }
+  }
 }
 
 function buildPager() {
@@ -1658,15 +1733,17 @@ function buildPager() {
       <div class="page-inner" id="body-${page.id}"></div>
     </section>`).join('');
 
-  const dots = document.getElementById('pdots');
-  dots.innerHTML = PAGES.map((page, i) => `
-    <button class="pdot" type="button" data-index="${i}"
-            aria-label="Show ${esc(page.title)}"></button>`).join('');
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML = PAGES.map((page, i) => `
+    <button class="tab" type="button" role="tab" data-index="${i}"
+            aria-selected="${i === 0}">${esc(page.title)}</button>`).join('');
 
-  dots.addEventListener('click', (event) => {
-    const button = event.target.closest('.pdot');
+  tabs.addEventListener('click', (event) => {
+    const button = event.target.closest('.tab');
     if (!button) return;
-    goToPage(Number(button.dataset.index));
+    const index = Number(button.dataset.index);
+    if (index === state.page) return;
+    goToPage(index);
   });
 
   let ticking = false;
@@ -1725,6 +1802,7 @@ function restorePage(index, done) {
 }
 
 function init() {
+  loadInstallCalls();
   loadSnapshot();
   const savedPage = readSavedPage();
   buildPager();
@@ -1747,8 +1825,12 @@ function init() {
   startGeolocation();
   restoreAlert();
   if (savedPage > 0 && currentIndex() !== savedPage) {
-    restorePage(savedPage, () => refresh());
+    restorePage(savedPage, () => {
+      activateCurrentPage();
+      refresh();
+    });
   } else {
+    activateCurrentPage();
     refresh();
   }
 
@@ -1764,8 +1846,12 @@ function init() {
       if (state.tracked) syncTracked();
       applyWakeLock();
       refresh();
+    } else {
+      flushInstallCalls();
     }
   });
+
+  window.addEventListener('pagehide', flushInstallCalls);
 
   window.addEventListener('online', () => refresh(true));
 

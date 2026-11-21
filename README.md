@@ -61,9 +61,10 @@ Court”, not “Hangking”).
   **N8X**, with departure and arrival groups at those two stops.
 
 **Info** — lists the live-data endpoints, app version and build date/time,
-and a per-session count of API calls (Citybus, KMB, Minibuses, TfL and the
-push worker) with the time of the last call. Counts reset on relaunch and
-only real network requests are counted, so cache hits are free.
+and API call counts for Citybus, KMB, Minibuses, TfL and the push worker:
+**Launch** (since this launch) and **Install** (stored on the device across
+relaunches), each with the time of the last call. Only real network requests
+are counted, so cache hits are free.
 
 Live data comes from the Transport Department's **eTA GMB** API
 (`data.etagmb.gov.hk`), the **Citybus** batch Stop-ETA API
@@ -84,9 +85,10 @@ poles serve more than one direction.
 ## What it does
 
 - Six pages — **Citybus**, **Taikoo ↔ New Trend**, **KMB**,
-  **Minibuses**, **London** and **Info** — swipe left/right to switch, or
-  tap the dots next to the status line. Each page keeps its own scroll
-  position.
+  **Minibuses**, **London** and **Info**. A tab bar under the status line
+  jumps straight to any page (it highlights the current one and scrolls
+  itself into view), and swiping left/right still works. Each page keeps
+  its own scroll position.
 - **Every page is lazy.** The app loads only the page on screen: one batch
   Stop-ETA request per Citybus stop, one per Taikoo stop, one per route +
   stop for KMB/GMB, and one per TfL line. That page refreshes every 30 s
@@ -243,7 +245,7 @@ arriving soonest and labels it with that group's destination.
 
 | File | Purpose |
 |------|---------|
-| `index.html` | The app shell: header, status line, page dots, pager |
+| `index.html` | The app shell: header, status line, page tabs, pager |
 | `styles.css` | iOS-style light/dark theme, pager and cards |
 | `app.js` | Fetching, paging, nearest-stop logic, rendering |
 | `data.js` | Generated route and stop data (names + coordinates) |
