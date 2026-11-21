@@ -47,8 +47,8 @@ Live data comes from the Transport Department's **eTA GMB** API
 (`rt.data.gov.hk/v1/transport/batch/stop-eta/CTB/{stop_id}`), the
 **KMB** ETA API
 (`data.etabus.gov.hk/v1/transport/kmb/eta/{stop_id}/{route}/{service_type}`)
-and **TfL**'s StopPoint Arrivals API
-(`api.tfl.gov.uk/StopPoint/{stop_id}/Arrivals`). No API key, no account,
+and **TfL**'s Line Arrivals API
+(`api.tfl.gov.uk/Line/{line}/Arrivals`). No API key, no account,
 no backend.
 
 Citybus's per-route ETA endpoint (`/v2/transport/citybus/eta/CTB/{route}/{stop}`)
@@ -170,6 +170,8 @@ arriving soonest and labels it with that group's destination.
   type 1) is tracked, in the directions shown above.
 - London arrivals come from TfL's StopPoint API and their clock times are
   shown in London time (`Europe/London`), whatever the phone's timezone.
+- Hong Kong bus clock times are shown in Hong Kong time
+  (`Asia/Hong_Kong`), so they stay correct when travelling.
 - The distance on each card is the straight-line distance (“as the crow
   flies”) from your last known position, shown only when location access is
   allowed. It is not a routed walking path and needs no extra map service.

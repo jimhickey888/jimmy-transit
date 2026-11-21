@@ -7,9 +7,11 @@ const GMB_API = 'https://data.etagmb.gov.hk';
 const CTB_API = 'https://rt.data.gov.hk';
 const KMB_API = 'https://data.etabus.gov.hk/v1/transport/kmb';
 const TFL_API = 'https://api.tfl.gov.uk';
+const HK_TZ = 'Asia/Hong_Kong';
+const LONDON_TZ = 'Europe/London';
 
 const APP_VERSION = '1.5.0';
-const APP_BUILD = '21 Nov 2026, 23:00 HKT';
+const APP_BUILD = '21 Nov 2026, 23:10 HKT';
 
 PAGES.push({
   id: 'info',
@@ -138,26 +140,45 @@ function ctbStopEta(stopId) {
   return promise;
 }
 
-/* TfL arrivals are per StopPoint. Several routes share the same stop, so
-   cache by stop ID for a few seconds to keep well under TfL's
+/* TfL arrivals for a whole line cover every stop on it. Fetching one
+   response per line keeps the London page well inside TfL's
    unauthenticated rate limit. */
-const TFL_STOP_TTL = 8000;
-const tflStops = new Map(); // stop_id -> { at, promise }
+const TFL_LINE_TTL = 20000;
+const tflLines = new Map(); // line -> { at, promise }
 
-function tflStopArrivals(stopId) {
+function tflLineArrivals(line) {
   const now = Date.now();
-  const hit = tflStops.get(stopId);
-  if (hit && now - hit.at < TFL_STOP_TTL) return hit.promise;
+  const hit = tflLines.get(line);
+  if (hit && now - hit.at < TFL_LINE_TTL) return hit.promise;
 
+  const entry = { at: now, rows: hit ? hit.rows : null, promise: null };
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12000);
-  const promise = getJson(`${TFL_API}/StopPoint/${stopId}/Arrivals`, controller.signal)
+  const timer = setTimeout(() => controller.abort(), 20000);
+
+  const load = (attempt) => getJson(`${TFL_API}/Line/${line}/Arrivals`, controller.signal)
     .then((rows) => (Array.isArray(rows) ? rows : []))
+    .catch((err) => {
+      if (attempt === 0) {
+        return new Promise((resolve) => setTimeout(resolve, 2000)).then(() => load(1));
+      }
+      /* If TfL rate-limits us, keep showing the last good data. */
+      if (entry.rows) return entry.rows;
+      throw err;
+    });
+
+  entry.promise = load(0)
+    .then((rows) => {
+      entry.rows = rows;
+      return rows;
+    })
+    .catch((err) => {
+      tflLines.delete(line);
+      throw err;
+    })
     .finally(() => clearTimeout(timer));
 
-  tflStops.set(stopId, { at: now, promise });
-  promise.catch(() => tflStops.delete(stopId));
-  return promise;
+  tflLines.set(line, entry);
+  return entry.promise;
 }
 
 async function fetchEta(page, route, stop) {
@@ -175,7 +196,10 @@ async function fetchEta(page, route, stop) {
       state.etas.set(key, {
         enabled: data.enabled !== false,
         desc: data.description_en || '',
-        list: Array.isArray(data.eta) ? data.eta : [],
+        list: (Array.isArray(data.eta) ? data.eta : []).map((entry) => ({
+          ...entry,
+          timeZone: HK_TZ,
+        })),
         at: Date.now(),
       });
     } finally {
@@ -211,6 +235,7 @@ async function fetchEta(page, route, stop) {
           const remark = row.rmk_en || row.rmk_tc || '';
           return {
             timestamp: row.eta,
+            timeZone: HK_TZ,
             remarks: remark,
             scheduled: /scheduled/i.test(remark) || remark.includes('原定'),
           };
@@ -224,26 +249,36 @@ async function fetchEta(page, route, stop) {
   }
 
   if (page.api === 'tfl') {
-    const rows = await tflStopArrivals(stop.stop_id);
-    const target = route.towards.toLowerCase();
-    const matched = rows
-      .filter((row) => row.lineName === route.line
-        && (row.destinationName || '').toLowerCase().includes(target)
-        && row.expectedArrival)
-      .sort((a, b) => Date.parse(a.expectedArrival) - Date.parse(b.expectedArrival));
+    try {
+      const rows = await tflLineArrivals(route.line);
+      const target = route.towards.toLowerCase();
+      const matched = rows
+        .filter((row) => row.lineName === route.line
+          && row.naptanId === stop.stop_id
+          && (row.destinationName || '').toLowerCase().includes(target)
+          && row.expectedArrival)
+        .sort((a, b) => Date.parse(a.expectedArrival) - Date.parse(b.expectedArrival));
 
-    const list = matched.map((row) => ({
-      timestamp: row.expectedArrival,
-      /* These are London buses; show London clock time even if the phone
-         is in another timezone. */
-      timeZone: 'Europe/London',
-      remarks: row.destinationName || '',
-      scheduled: false,
-    }));
+      const list = matched.map((row) => ({
+        timestamp: row.expectedArrival,
+        /* These are London buses; show London clock time even if the phone
+           is in another timezone. */
+        timeZone: LONDON_TZ,
+        remarks: row.destinationName || '',
+        scheduled: false,
+      }));
 
-    state.etas.set(key, {
-      enabled: true, desc: '', dest: route.towards, list, at: Date.now(),
-    });
+      state.etas.set(key, {
+        enabled: true, desc: '', dest: route.towards, list, at: Date.now(),
+      });
+    } catch (err) {
+      state.etas.set(key, {
+        enabled: false,
+        desc: 'London feed unavailable',
+        list: [],
+        at: Date.now(),
+      });
+    }
     return;
   }
 
@@ -261,6 +296,7 @@ async function fetchEta(page, route, stop) {
     .filter((row) => (row.dest || '') === dest)
     .map((row) => ({
       timestamp: row.eta,
+      timeZone: HK_TZ,
       remarks: row.rmk || '',
       /* Citybus has no scheduled/live flag in the open data. A scheduled
          trip is published on the exact minute; live GPS predictions carry
@@ -276,7 +312,7 @@ async function refresh(force = false) {
   if (!force && state.lastUpdate && Date.now() - state.lastUpdate.getTime() < 5000) return;
   if (force) {
     ctbStops.clear();
-    tflStops.clear();
+    tflLines.clear();
   }
   state.busy = true;
   setBusy(true);
@@ -487,7 +523,7 @@ function infoHtml() {
     ['Minibuses (GMB)', 'https://data.etagmb.gov.hk/eta/route-stop/{route_id}/{route_seq}/{stop_seq}'],
     ['Citybus', 'https://rt.data.gov.hk/v1/transport/batch/stop-eta/CTB/{stop_id}'],
     ['KMB', 'https://data.etabus.gov.hk/v1/transport/kmb/eta/{stop_id}/{route}/{service_type}'],
-    ['London buses (TfL)', 'https://api.tfl.gov.uk/StopPoint/{stop_id}/Arrivals'],
+    ['London buses (TfL)', 'https://api.tfl.gov.uk/Line/{line}/Arrivals'],
   ];
 
   return `
