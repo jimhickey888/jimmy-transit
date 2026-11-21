@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.5.0';
-const APP_BUILD = '22 Nov 2026, 03:20 HKT';
+const APP_VERSION = '2.5.1';
+const APP_BUILD = '22 Nov 2026, 03:24 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -1733,7 +1733,20 @@ function buildPager() {
       <div class="page-inner" id="body-${page.id}"></div>
     </section>`).join('');
 
-  const tabs = document.getElementById('tabs');
+  /* Defensive: if an older cached shell is served with a newer app.js, add
+     the tab bar instead of failing on a missing element. */
+  let tabs = document.getElementById('tabs');
+  if (!tabs) {
+    tabs = document.createElement('nav');
+    tabs.id = 'tabs';
+    tabs.className = 'tabs';
+    tabs.setAttribute('role', 'tablist');
+    tabs.setAttribute('aria-label', 'Pages');
+    const statusline = document.querySelector('.statusline');
+    if (statusline) statusline.after(tabs);
+    else document.querySelector('#app').prepend(tabs);
+  }
+
   tabs.innerHTML = PAGES.map((page, i) => `
     <button class="tab" type="button" role="tab" data-index="${i}"
             aria-selected="${i === 0}">${esc(page.title)}</button>`).join('');
