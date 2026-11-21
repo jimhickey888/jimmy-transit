@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.3.3';
-const APP_BUILD = '22 Nov 2026, 03:07 HKT';
+const APP_VERSION = '2.4.0';
+const APP_BUILD = '22 Nov 2026, 03:11 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -418,8 +418,10 @@ async function fetchSegment(direction, route) {
 
 /* Citybus and Taikoo load with the app; KMB, Minibuses and London fetch
    their first data only when the page is swiped to, then refresh normally. */
+/* Only the static Info page is always rendered; every live page loads and
+   refreshes only while it is the page on screen. */
 function pageIsEager(page) {
-  return page.api === 'ctb' || page.api === 'segment' || page.api === 'info';
+  return page.api === 'info';
 }
 
 function pageIsLoaded(page) {
@@ -428,7 +430,7 @@ function pageIsLoaded(page) {
 
 function pageJobs(page) {
   const jobs = new Map();
-  for (const route of page.routes) {
+  for (const route of page.routes || []) {
     for (const stop of route.bookmarks) {
       jobs.set(keyOf(page, route, stop), { page, route, stop });
     }
@@ -443,9 +445,16 @@ function pageJobs(page) {
 /* Fetch just one page's stops: on first visit, or when it goes stale. */
 async function fetchPage(page) {
   state.pageUpdated.set(page.id, Date.now());
-  const results = await Promise.allSettled(
-    pageJobs(page).map(({ page: owner, route, stop }) => fetchEta(owner, route, stop)),
-  );
+  const segmentJobs = [];
+  if (page.api === 'segment') {
+    for (const direction of page.directions) {
+      for (const route of direction.routes) segmentJobs.push({ direction, route });
+    }
+  }
+  const results = await Promise.allSettled([
+    ...pageJobs(page).map(({ page: owner, route, stop }) => fetchEta(owner, route, stop)),
+    ...segmentJobs.map(({ direction, route }) => fetchSegment(direction, route)),
+  ]);
   if (results.some((result) => result.status === 'fulfilled')) {
     state.lastUpdate = new Date();
     state.fromCache = false;
@@ -454,8 +463,8 @@ async function fetchPage(page) {
   render();
 }
 
-/* First visit: fetch only this page, so the initial app load stays limited
-   to Citybus and Taikoo. */
+/* First visit: fetch only this page, so the app loads just the page you
+   are looking at. */
 async function loadPage(page) {
   if (!page || page.api === 'info' || pageIsLoaded(page)) return;
   state.loaded.add(page.id);
@@ -471,12 +480,9 @@ function maybeRefreshPage(page) {
   fetchPage(page);
 }
 
-/* Only the page being looked at (plus Citybus/Taikoo, and the page of a
-   tracked arrival) keeps polling in the background. */
+/* Only the page on screen polls. Nothing refreshes in the background. */
 function pageIsLive(page) {
   if (!pageIsLoaded(page)) return false;
-  if (pageIsEager(page)) return true;
-  if (state.tracked && state.tracked.pageId === page.id) return true;
   const current = PAGES[state.page];
   return Boolean(current && current.id === page.id);
 }
@@ -900,8 +906,8 @@ function infoHtml() {
     <p class="info-note">
       Live arrivals from the Transport Department, data.gov.hk and TfL.
       Pages: Citybus, Taikoo ↔ New Trend, KMB, Minibuses and London.
-      Citybus and Taikoo load with the app; KMB, Minibuses and London fetch
-      their first data when you swipe to them, then keep refreshing.
+      Each page loads its data the first time you swipe to it, and only the
+      page on screen keeps refreshing.
     </p>`;
 }
 
@@ -1640,8 +1646,11 @@ function readSavedPage() {
   }
 }
 
-function restorePage(index) {
-  if (!Number.isInteger(index) || index <= 0 || index >= PAGES.length) return;
+function restorePage(index, done) {
+  if (!Number.isInteger(index) || index <= 0 || index >= PAGES.length) {
+    if (done) done();
+    return;
+  }
   let tries = 3;
   /* On a cold launch the pager can still have zero width for a frame or two
      on iOS, which would silently drop the scroll. */
@@ -1649,9 +1658,14 @@ function restorePage(index) {
     if (pagerEl().clientWidth > 0) {
       goToPage(index, false);
       syncChrome();
+      if (done) done();
       return;
     }
-    if (tries-- > 0) requestAnimationFrame(place);
+    if (tries-- > 0) {
+      requestAnimationFrame(place);
+    } else if (done) {
+      done();
+    }
   };
   requestAnimationFrame(place);
 }
@@ -1660,9 +1674,10 @@ function init() {
   loadSnapshot();
   const savedPage = readSavedPage();
   buildPager();
+  /* Jump before the first syncChrome so only the restored page loads. */
+  if (savedPage > 0 && savedPage < PAGES.length) goToPage(savedPage, false);
   syncChrome();
   render();
-  restorePage(savedPage);
 
   document.getElementById('refresh').addEventListener('click', () => refresh(true));
 
@@ -1676,8 +1691,12 @@ function init() {
   });
 
   startGeolocation();
-  refresh();
   restoreAlert();
+  if (savedPage > 0 && currentIndex() !== savedPage) {
+    restorePage(savedPage, () => refresh());
+  } else {
+    refresh();
+  }
 
   ensureTrackedTimer();
 

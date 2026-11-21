@@ -84,13 +84,13 @@ poles serve more than one direction.
   **Minibuses**, **London** and **Info** — swipe left/right to switch, or
   tap the dots next to the status line. Each page keeps its own scroll
   position.
-- **Citybus** and **Taikoo** load with the app and refresh every 30 s.
-  **KMB**, **Minibuses** and **London** fetch their first data only when
-  you swipe to them (one request per route + stop for KMB/GMB, one per TfL
-  line). After that they refresh every 30 s **while that page is on
-  screen**, and refetch immediately when you return to them after more than
-  ten seconds. A tracked bus keeps its own page refreshing wherever you
-  are.
+- **Every page is lazy.** The app loads only the page on screen: one batch
+  Stop-ETA request per Citybus stop, one per Taikoo stop, one per route +
+  stop for KMB/GMB, and one per TfL line. That page refreshes every 30 s
+  while it is visible, and refetches immediately when you return to it
+  after more than ten seconds. Nothing polls in the background, including
+  the page of a tracked bus (its countdown keeps running from the pinned
+  time; swipe back to re-sync the prediction).
 - Shows the next 3 buses for each saved stop, with a large countdown and
   the actual arrival clock time with seconds underneath (e.g. `12 min`
   above `21:48:30`).
