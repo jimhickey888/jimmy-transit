@@ -39,6 +39,10 @@ poles serve more than one direction.
   or tap the dots next to the status line. Each page keeps its own scroll
   position.
 - Shows the next 3 buses for each saved stop, in minutes.
+- Citybus arrivals are colour-coded: green/grey entries are **live**
+  (GPS-based) predictions, and blue entries are **scheduled** times taken
+  from Citybus's timetable. Live data is shown wherever Citybus publishes
+  it; scheduled times fill the remaining slots.
 - Refreshes every 30 seconds while the screen is open.
 - Uses your location to highlight the nearest stop *on the page you are
   looking at* in a strip at the top. Location is optional — the saved
@@ -122,6 +126,12 @@ arriving soonest and labels it with that group's destination.
 - Citybus cards are built from the stop lists chosen in `bake.py` (all
   outbound stop numbers). The destination on each card shows which way the
   listed buses are actually travelling.
+- Citybus does not label scheduled rows explicitly in its open data. The
+  app treats a row as scheduled when its ETA falls exactly on the minute
+  (`20:30:00`); live GPS predictions include seconds (`20:29:47`). This
+  matches the “Scheduled” label in the official Citybus app. On the rare
+  occasion a live prediction lands exactly on `:00`, it will be shown as
+  scheduled.
 - If every Citybus card is empty for a long stretch during service hours,
   the Citybus feed itself may be down; it usually recovers without a change
   here. The minibus page is unaffected.

@@ -9,6 +9,8 @@
   --green-ink: #ffffff;
   --green-soft: rgba(11, 122, 69, 0.10);
   --amber: #b25000;
+  --sched: #0a84ff;
+  --sched-soft: rgba(10, 132, 255, 0.12);
   --chip: rgba(120, 120, 128, 0.12);
   --dot: rgba(120, 120, 128, 0.42);
   --shadow: 0 1px 1px rgba(0, 0, 0, 0.04), 0 10px 30px rgba(0, 0, 0, 0.05);
@@ -26,6 +28,8 @@
     --green-ink: #04240f;
     --green-soft: rgba(48, 194, 124, 0.14);
     --amber: #ff9f0a;
+    --sched: #64d2ff;
+    --sched-soft: rgba(100, 210, 255, 0.16);
     --chip: rgba(120, 120, 128, 0.24);
     --dot: rgba(160, 160, 170, 0.45);
     --shadow: none;
@@ -266,6 +270,8 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
+.nearest-eta.sched { color: var(--sched); }
+
 /* ---------- routes ---------- */
 
 .route {
@@ -400,6 +406,19 @@ h1 {
 }
 
 .eta.first.due small { color: #fff; }
+
+/* Citybus timetable times, as opposed to live GPS predictions. */
+.eta.sched {
+  background: var(--sched-soft);
+  color: var(--sched);
+}
+
+.eta.sched b { font-weight: 700; }
+
+.eta.sched small {
+  color: inherit;
+  opacity: 0.85;
+}
 
 .empty {
   font-size: 14px;

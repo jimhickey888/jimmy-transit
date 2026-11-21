@@ -35,11 +35,20 @@ function minutesFrom(entry, now) {
   return null;
 }
 
-function sortedMinutes(list, now) {
+function isWholeMinute(iso) {
+  const t = Date.parse(iso);
+  return Number.isFinite(t) && new Date(t).getSeconds() === 0;
+}
+
+function sortedEntries(list, now) {
   return list
-    .map((entry) => minutesFrom(entry, now))
-    .filter((m) => m !== null)
-    .sort((a, b) => a - b);
+    .map((entry) => {
+      const m = minutesFrom(entry, now);
+      if (m === null) return null;
+      return { m, scheduled: !!entry.scheduled };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.m - b.m);
 }
 
 function fmtTime(date) {
@@ -128,7 +137,14 @@ async function fetchEta(page, route, stop) {
   const dest = matched.length ? (matched[0].dest || '') : '';
   const list = matched
     .filter((row) => (row.dest || '') === dest)
-    .map((row) => ({ timestamp: row.eta, remarks: row.rmk || '' }));
+    .map((row) => ({
+      timestamp: row.eta,
+      remarks: row.rmk || '',
+      /* Citybus has no scheduled/live flag in the open data. A scheduled
+         trip is published on the exact minute; live GPS predictions carry
+         seconds. */
+      scheduled: isWholeMinute(row.eta),
+    }));
 
   state.etas.set(key, { enabled: true, desc: '', dest, list, at: Date.now() });
 }
@@ -233,13 +249,20 @@ function etasHtml(page, route, stop) {
   if (!cached) return '<span class="empty">Loading…</span>';
   if (!cached.enabled) return `<span class="empty">${esc(cached.desc || 'Not available')}</span>`;
 
-  const minutes = sortedMinutes(cached.list, Date.now()).slice(0, MAX_ETAS);
-  if (!minutes.length) return '<span class="empty">No arrivals right now</span>';
+  const entries = sortedEntries(cached.list, Date.now()).slice(0, MAX_ETAS);
+  if (!entries.length) return '<span class="empty">No arrivals right now</span>';
 
-  return minutes.map((m, i) => {
-    const first = i === 0 ? ' first' : '';
-    if (m <= 0) return `<span class="eta${first} due">Due</span>`;
-    return `<span class="eta${first}"><b>${m}</b><small>min</small></span>`;
+  return entries.map(({ m, scheduled }, i) => {
+    const classes = ['eta'];
+    if (scheduled) classes.push('sched');
+    else if (i === 0) classes.push('first');
+    if (m <= 0 && !scheduled) classes.push('due');
+
+    const cls = classes.join(' ');
+    const title = scheduled ? 'Scheduled time' : 'Live arrival';
+
+    if (m <= 0) return `<span class="${cls}" title="${title}">Due</span>`;
+    return `<span class="${cls}" title="${title}"><b>${m}</b><small>min</small></span>`;
   }).join('');
 }
 
@@ -257,14 +280,19 @@ function nearestHtml(page) {
   const { route, stop, dist } = near;
   const cached = state.etas.get(keyOf(page, route, stop));
   let eta = '…';
+  let scheduled = false;
 
   if (cached) {
     if (!cached.enabled) {
       eta = '—';
     } else {
-      const minutes = sortedMinutes(cached.list, Date.now());
-      if (!minutes.length) eta = '—';
-      else eta = minutes[0] <= 0 ? 'Due' : `${minutes[0]} min`;
+      const entries = sortedEntries(cached.list, Date.now());
+      if (!entries.length) {
+        eta = '—';
+      } else {
+        eta = entries[0].m <= 0 ? 'Due' : `${entries[0].m} min`;
+        scheduled = entries[0].scheduled;
+      }
     }
   }
 
@@ -279,7 +307,7 @@ function nearestHtml(page) {
         <div class="nearest-stop">${esc(route.code)} · ${esc(stop.name)}</div>
         <div class="nearest-dist">${fmtDistance(dist)} away</div>
       </div>
-      <div class="nearest-eta">${esc(eta)}</div>
+      <div class="nearest-eta${scheduled ? ' sched' : ''}">${esc(eta)}</div>
     </div>`;
 }
 
