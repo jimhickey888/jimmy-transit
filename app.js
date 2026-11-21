@@ -7,8 +7,8 @@ const GMB_API = 'https://data.etagmb.gov.hk';
 const CTB_API = 'https://rt.data.gov.hk';
 const KMB_API = 'https://data.etabus.gov.hk/v1/transport/kmb';
 
-const APP_VERSION = '1.4.0';
-const APP_BUILD = '21 Nov 2026, 22:10 HKT';
+const APP_VERSION = '1.4.1';
+const APP_BUILD = '21 Nov 2026, 22:26 HKT';
 
 PAGES.push({
   id: 'info',
