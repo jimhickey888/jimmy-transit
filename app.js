@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.0.4';
-const APP_BUILD = '22 Nov 2026, 02:12 HKT';
+const APP_VERSION = '2.0.5';
+const APP_BUILD = '22 Nov 2026, 02:18 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -979,6 +979,11 @@ function toggleTracked(pill) {
   if (isTrackedPill(pill)) {
     clearTracked();
     return;
+  }
+  /* Switching to another bus must cancel the previous pending alert,
+     otherwise it would still arrive for a bus you no longer track. */
+  if (state.tracked && state.tracked.alert && state.tracked.alert.active) {
+    cancelAlert(state.tracked.alert.id);
   }
   state.tracked = {
     routeCode: pill.routeCode,
