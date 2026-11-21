@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '1.8.1';
-const APP_BUILD = '22 Nov 2026, 00:20 HKT';
+const APP_VERSION = '1.9.0';
+const APP_BUILD = '22 Nov 2026, 00:35 HKT';
 
 PAGES.push({
   id: 'info',
@@ -309,11 +309,12 @@ async function fetchEta(page, route, stop) {
   state.etas.set(key, { enabled: true, desc: '', dest, list, at: Date.now() });
 }
 
-async function fetchSegment(route) {
+async function fetchSegment(direction, route) {
+  const key = `${direction.id}:${route.code}`;
   try {
     const [fromRows, toRows] = await Promise.all([
-      ctbStopEta(route.from.stop_id),
-      ctbStopEta(route.to.stop_id),
+      ctbStopEta(direction.from.stop_id),
+      ctbStopEta(direction.to.stop_id),
     ]);
 
     const pick = (rows, seq) => rows
@@ -326,14 +327,14 @@ async function fetchSegment(route) {
         scheduled: isWholeMinute(row.eta),
       }));
 
-    state.segments.set(route.code, {
+    state.segments.set(key, {
       from: { enabled: true, desc: '', list: pick(fromRows, route.fromSeq) },
       to: { enabled: true, desc: '', list: pick(toRows, route.toSeq) },
       at: Date.now(),
     });
   } catch (err) {
     const failed = { enabled: false, desc: 'Citybus feed unavailable', list: [] };
-    state.segments.set(route.code, { from: failed, to: failed, at: Date.now() });
+    state.segments.set(key, { from: failed, to: failed, at: Date.now() });
     throw err;
   }
 }
@@ -349,10 +350,14 @@ async function refresh(force = false) {
   setBusy(true);
 
   const jobs = new Map();
-  const segmentRoutes = [];
+  const segmentJobs = [];
   for (const page of PAGES) {
     if (page.api === 'segment') {
-      segmentRoutes.push(...page.routes);
+      for (const direction of page.directions) {
+        for (const route of direction.routes) {
+          segmentJobs.push({ direction, route });
+        }
+      }
       continue;
     }
     for (const route of page.routes) {
@@ -368,7 +373,7 @@ async function refresh(force = false) {
 
   const results = await Promise.allSettled([
     ...[...jobs.values()].map(({ page, route, stop }) => fetchEta(page, route, stop)),
-    ...segmentRoutes.map((route) => fetchSegment(route)),
+    ...segmentJobs.map(({ direction, route }) => fetchSegment(direction, route)),
   ]);
 
   state.error = results.length > 0 && results.every((r) => r.status === 'rejected');
@@ -633,46 +638,46 @@ function sourceLine(page) {
 }
 
 function segmentHtml(page) {
-  const from = page.from || page.routes[0].from;
-  const to = page.to || page.routes[0].to;
-  const blocks = [
-    { stop: from, label: '→ New Trend Plaza', field: 'from' },
-    { stop: to, label: '← Taikoo Place', field: 'to' },
-  ];
+  let html = `<p class="segment-note">Next departures and arrivals at both ends, in both directions. The reverse direction uses the nearest eastbound stops.</p>`;
 
-  let html = `<p class="segment-note">Next departures from Taikoo Place and arrivals at New Trend Plaza.</p>`;
+  for (const direction of page.directions) {
+    const blocks = [
+      { stop: direction.from, label: `→ ${direction.to.name}`, field: 'from' },
+      { stop: direction.to, label: `← ${direction.from.name}`, field: 'to' },
+    ];
 
-  for (const block of blocks) {
-    const point = (typeof block.stop.lat === 'number' && typeof block.stop.lon === 'number')
-      ? { lat: block.stop.lat, lon: block.stop.lon }
-      : null;
-    const dist = state.lastPos && point ? distanceM(state.lastPos, point) : null;
-    const meta = [
-      block.label,
-      Number.isFinite(dist) ? `${fmtDistance(dist)} away` : '',
-    ].filter(Boolean).join(' · ');
+    for (const block of blocks) {
+      const point = (typeof block.stop.lat === 'number' && typeof block.stop.lon === 'number')
+        ? { lat: block.stop.lat, lon: block.stop.lon }
+        : null;
+      const dist = state.lastPos && point ? distanceM(state.lastPos, point) : null;
+      const meta = [
+        block.label,
+        Number.isFinite(dist) ? `${fmtDistance(dist)} away` : '',
+      ].filter(Boolean).join(' · ');
 
-    html += `
-      <section class="stop-group">
-        <div class="stop-group-head">
-          <div class="stop-group-main">
-            <div class="stop-group-name">${esc(block.stop.name)}</div>
-            <div class="stop-group-dir">${esc(meta)}</div>
+      html += `
+        <section class="stop-group">
+          <div class="stop-group-head">
+            <div class="stop-group-main">
+              <div class="stop-group-name">${esc(block.stop.name)}</div>
+              <div class="stop-group-dir">${esc(meta)}</div>
+            </div>
+            <div class="stop-group-id">Stop ${esc(block.stop.stop_id)}</div>
           </div>
-          <div class="stop-group-id">Stop ${esc(block.stop.stop_id)}</div>
-        </div>
-        <article class="card shared">
-          ${page.routes.map((route) => {
-            const cache = state.segments.get(route.code);
-            const list = cache ? cache[block.field] : null;
-            return `
-              <div class="route-row">
-                <span class="badge">${esc(route.code)}</span>
-                <div class="etas">${etaPills(list)}</div>
-              </div>`;
-          }).join('')}
-        </article>
-      </section>`;
+          <article class="card shared">
+            ${direction.routes.map((route) => {
+              const cache = state.segments.get(`${direction.id}:${route.code}`);
+              const list = cache ? cache[block.field] : null;
+              return `
+                <div class="route-row">
+                  <span class="badge">${esc(route.code)}</span>
+                  <div class="etas">${etaPills(list)}</div>
+                </div>`;
+            }).join('')}
+          </article>
+        </section>`;
+    }
   }
 
   html += `<footer class="foot"><p>${sourceLine(page)}</p></footer>`;
@@ -705,7 +710,7 @@ function infoHtml() {
     </section>
     <p class="info-note">
       Live arrivals from the Transport Department, data.gov.hk and TfL.
-      Pages: Citybus, KMB, Minibuses, Taikoo → New Trend and London.
+      Pages: Citybus, KMB, Minibuses, Taikoo ↔ New Trend and London.
     </p>`;
 }
 
@@ -818,7 +823,9 @@ function syncChrome() {
   if (!page) return;
 
   document.getElementById('title').textContent = page.title;
-  const codes = [...new Set(page.routes.map((r) => r.code))];
+  const codes = page.routes
+    ? [...new Set(page.routes.map((r) => r.code))]
+    : [];
   document.getElementById('sub').textContent = page.subtitle || codes.join(' · ');
   document.title = `${page.title} · Jimmy Bus Tracker`;
 

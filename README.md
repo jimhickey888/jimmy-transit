@@ -2,7 +2,7 @@
 
 A one-screen-per-page iPhone web app showing the next arrivals for the
 buses around Braemar Hill and in Wimbledon, London, in six swipeable
-pages: **Citybus**, **KMB**, **Minibuses**, **Taikoo → New Trend**,
+pages: **Citybus**, **KMB**, **Minibuses**, **Taikoo ↔ New Trend**,
 **London** and **Info**.
 
 **Citybus** — routes **27**, **85**, **25A** and **25** (outbound):
@@ -41,11 +41,17 @@ pages: **Citybus**, **KMB**, **Minibuses**, **Taikoo → New Trend**,
 | 93 | towards North Cheam | Wimbledon Village · Wimbledon Hill Road · Wimbledon Station |
 | 93 | towards Putney Bridge | Morden Road Tram Stop · South Wimbledon Station · Wimbledon Hill Road |
 
-**Taikoo → New Trend** — every Citybus route whose stop order runs from
-Taikoo Place before New Trend Plaza: **77**, **81**, **81A**, **85**,
-**85A**, **8H**, **99** and **N8X**. The page has two stop groups —
-Taikoo Place and New Trend Plaza — each listing all eight routes with
-their next arrivals, stop IDs and distance.
+**Taikoo ↔ New Trend** — both directions:
+
+- **Taikoo Place → New Trend Plaza:** routes **77**, **81**, **81A**,
+  **85**, **85A**, **8H**, **99** and **N8X**, with stop groups at Taikoo
+  Place (departures) and New Trend Plaza (arrivals).
+- **New Trend area → Taikoo area:** eastbound buses use different poles.
+  The nearest departure stop is **Tin Chong Street** (19 m from New Trend
+  Plaza) and the nearest arrival stop is **Sunway Gardens** (about 160 m
+  from Taikoo Place). Routes: **102**, **106**, **116**, **15A**, **2**,
+  **2A**, **307P**, **678**, **77**, **81**, **8H**, **99**, **N122** and
+  **N8X**, with departure and arrival groups at those two stops.
 
 **Info** — lists the live-data endpoints, app version and build date/time.
 
@@ -68,7 +74,7 @@ poles serve more than one direction.
 ## What it does
 
 - Six pages — **Citybus**, **KMB**, **Minibuses**,
-  **Taikoo → New Trend**, **London** and **Info** — swipe left/right to
+  **Taikoo ↔ New Trend**, **London** and **Info** — swipe left/right to
   switch, or tap the dots next to the status line. Each page keeps its own
   scroll position.
 - Shows the next 3 buses for each saved stop, with a large countdown and
@@ -79,9 +85,9 @@ poles serve more than one direction.
 - Arrivals are grouped by **stop and direction**, not by route: each stop
   heading shows the direction, distance and stop ID, with every route
   serving that stop listed underneath.
-- The **Taikoo → New Trend** page uses the same grouping: one Taikoo Place
-  group and one New Trend Plaza group, each listing all eight routes
-  between them.
+- The **Taikoo ↔ New Trend** page uses the same grouping in both
+  directions: Taikoo Place/New Trend Plaza, plus Tin Chong Street and
+  Sunway Gardens for the nearest eastbound stops.
 - Stops served by more than one route, or with groups in both directions,
   get a matching lighter card background so the group stands out.
 - Citybus and KMB arrivals are colour-coded: green/grey entries are **live**
@@ -193,9 +199,11 @@ arriving soonest and labels it with that group's destination.
   **Wimbledon Station** and **Francis Grove**, then the remaining stops.
 - Hong Kong bus clock times are shown in Hong Kong time
   (`Asia/Hong_Kong`), so they stay correct when travelling.
-- The Taikoo → New Trend page shows each route's next arrivals at both
-  ends of the segment. Citybus does not expose vehicle IDs, so the two
-  lists are not paired bus-by-bus.
+- The **Taikoo ↔ New Trend** page shows next departures and arrivals at
+  both ends of each direction. The reverse direction uses the nearest
+  eastbound stops (Tin Chong Street → Sunway Gardens) because eastbound
+  buses do not use the Taikoo Place/New Trend Plaza poles. Citybus does not
+  expose vehicle IDs, so the lists are not paired bus-by-bus.
 - The distance in each stop heading is the straight-line distance (“as the
   crow flies”) from your last known position, shown only when location
   access is allowed. It is not a routed walking path and needs no extra map

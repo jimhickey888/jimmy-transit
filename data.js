@@ -1708,15 +1708,11 @@ const PAGES = [
   {
     "id": "segment",
     "title": "Taikoo",
-    "subtitle": "→ New Trend Plaza · 8 routes",
+    "subtitle": "↔ New Trend Plaza · both directions",
     "api": "segment",
-    "routes": [
+    "directions": [
       {
-        "code": "77",
-        "route": "77",
-        "dirCode": "I",
-        "fromSeq": 19,
-        "toSeq": 26,
+        "id": "to_new_trend",
         "from": {
           "stop_id": "001273",
           "name": "Taikoo Place, King's Road",
@@ -1728,154 +1724,182 @@ const PAGES = [
           "name": "New Trend Plaza, King's Road",
           "lat": 22.289909792091,
           "lon": 114.19515688053
-        }
+        },
+        "routes": [
+          {
+            "code": "77",
+            "route": "77",
+            "dirCode": "I",
+            "fromSeq": 19,
+            "toSeq": 26
+          },
+          {
+            "code": "81",
+            "route": "81",
+            "dirCode": "O",
+            "fromSeq": 24,
+            "toSeq": 32
+          },
+          {
+            "code": "81A",
+            "route": "81A",
+            "dirCode": "O",
+            "fromSeq": 19,
+            "toSeq": 26
+          },
+          {
+            "code": "85",
+            "route": "85",
+            "dirCode": "O",
+            "fromSeq": 23,
+            "toSeq": 30
+          },
+          {
+            "code": "85A",
+            "route": "85A",
+            "dirCode": "O",
+            "fromSeq": 12,
+            "toSeq": 20
+          },
+          {
+            "code": "8H",
+            "route": "8H",
+            "dirCode": "O",
+            "fromSeq": 27,
+            "toSeq": 34
+          },
+          {
+            "code": "99",
+            "route": "99",
+            "dirCode": "I",
+            "fromSeq": 19,
+            "toSeq": 26
+          },
+          {
+            "code": "N8X",
+            "route": "N8X",
+            "dirCode": "O",
+            "fromSeq": 25,
+            "toSeq": 33
+          }
+        ]
       },
       {
-        "code": "81",
-        "route": "81",
-        "dirCode": "O",
-        "fromSeq": 24,
-        "toSeq": 32,
+        "id": "to_taikoo",
         "from": {
-          "stop_id": "001273",
-          "name": "Taikoo Place, King's Road",
-          "lat": 22.286667942091,
-          "lon": 114.21039739053
+          "stop_id": "001261",
+          "name": "Tin Chong Street, King's Road",
+          "lat": 22.290056622091,
+          "lon": 114.19505769053
         },
         "to": {
-          "stop_id": "001282",
-          "name": "New Trend Plaza, King's Road",
-          "lat": 22.289909792091,
-          "lon": 114.19515688053
-        }
-      },
-      {
-        "code": "81A",
-        "route": "81A",
-        "dirCode": "O",
-        "fromSeq": 19,
-        "toSeq": 26,
-        "from": {
-          "stop_id": "001273",
-          "name": "Taikoo Place, King's Road",
-          "lat": 22.286667942091,
-          "lon": 114.21039739053
+          "stop_id": "001268",
+          "name": "Sunway Gardens, King's Road",
+          "lat": 22.285544382091,
+          "lon": 114.21133814053
         },
-        "to": {
-          "stop_id": "001282",
-          "name": "New Trend Plaza, King's Road",
-          "lat": 22.289909792091,
-          "lon": 114.19515688053
-        }
-      },
-      {
-        "code": "85",
-        "route": "85",
-        "dirCode": "O",
-        "fromSeq": 23,
-        "toSeq": 30,
-        "from": {
-          "stop_id": "001273",
-          "name": "Taikoo Place, King's Road",
-          "lat": 22.286667942091,
-          "lon": 114.21039739053
-        },
-        "to": {
-          "stop_id": "001282",
-          "name": "New Trend Plaza, King's Road",
-          "lat": 22.289909792091,
-          "lon": 114.19515688053
-        }
-      },
-      {
-        "code": "85A",
-        "route": "85A",
-        "dirCode": "O",
-        "fromSeq": 12,
-        "toSeq": 20,
-        "from": {
-          "stop_id": "001273",
-          "name": "Taikoo Place, King's Road",
-          "lat": 22.286667942091,
-          "lon": 114.21039739053
-        },
-        "to": {
-          "stop_id": "001282",
-          "name": "New Trend Plaza, King's Road",
-          "lat": 22.289909792091,
-          "lon": 114.19515688053
-        }
-      },
-      {
-        "code": "8H",
-        "route": "8H",
-        "dirCode": "O",
-        "fromSeq": 27,
-        "toSeq": 34,
-        "from": {
-          "stop_id": "001273",
-          "name": "Taikoo Place, King's Road",
-          "lat": 22.286667942091,
-          "lon": 114.21039739053
-        },
-        "to": {
-          "stop_id": "001282",
-          "name": "New Trend Plaza, King's Road",
-          "lat": 22.289909792091,
-          "lon": 114.19515688053
-        }
-      },
-      {
-        "code": "99",
-        "route": "99",
-        "dirCode": "I",
-        "fromSeq": 19,
-        "toSeq": 26,
-        "from": {
-          "stop_id": "001273",
-          "name": "Taikoo Place, King's Road",
-          "lat": 22.286667942091,
-          "lon": 114.21039739053
-        },
-        "to": {
-          "stop_id": "001282",
-          "name": "New Trend Plaza, King's Road",
-          "lat": 22.289909792091,
-          "lon": 114.19515688053
-        }
-      },
-      {
-        "code": "N8X",
-        "route": "N8X",
-        "dirCode": "O",
-        "fromSeq": 25,
-        "toSeq": 33,
-        "from": {
-          "stop_id": "001273",
-          "name": "Taikoo Place, King's Road",
-          "lat": 22.286667942091,
-          "lon": 114.21039739053
-        },
-        "to": {
-          "stop_id": "001282",
-          "name": "New Trend Plaza, King's Road",
-          "lat": 22.289909792091,
-          "lon": 114.19515688053
-        }
+        "routes": [
+          {
+            "code": "102",
+            "route": "102",
+            "dirCode": "I",
+            "fromSeq": 23,
+            "toSeq": 29
+          },
+          {
+            "code": "106",
+            "route": "106",
+            "dirCode": "I",
+            "fromSeq": 21,
+            "toSeq": 27
+          },
+          {
+            "code": "116",
+            "route": "116",
+            "dirCode": "I",
+            "fromSeq": 25,
+            "toSeq": 31
+          },
+          {
+            "code": "15A",
+            "route": "15A",
+            "dirCode": "I",
+            "fromSeq": 25,
+            "toSeq": 32
+          },
+          {
+            "code": "2",
+            "route": "2",
+            "dirCode": "I",
+            "fromSeq": 17,
+            "toSeq": 24
+          },
+          {
+            "code": "2A",
+            "route": "2A",
+            "dirCode": "I",
+            "fromSeq": 8,
+            "toSeq": 15
+          },
+          {
+            "code": "307P",
+            "route": "307P",
+            "dirCode": "O",
+            "fromSeq": 3,
+            "toSeq": 9
+          },
+          {
+            "code": "678",
+            "route": "678",
+            "dirCode": "I",
+            "fromSeq": 5,
+            "toSeq": 11
+          },
+          {
+            "code": "77",
+            "route": "77",
+            "dirCode": "O",
+            "fromSeq": 16,
+            "toSeq": 23
+          },
+          {
+            "code": "81",
+            "route": "81",
+            "dirCode": "I",
+            "fromSeq": 9,
+            "toSeq": 16
+          },
+          {
+            "code": "8H",
+            "route": "8H",
+            "dirCode": "I",
+            "fromSeq": 8,
+            "toSeq": 15
+          },
+          {
+            "code": "99",
+            "route": "99",
+            "dirCode": "O",
+            "fromSeq": 21,
+            "toSeq": 28
+          },
+          {
+            "code": "N122",
+            "route": "N122",
+            "dirCode": "I",
+            "fromSeq": 27,
+            "toSeq": 33
+          },
+          {
+            "code": "N8X",
+            "route": "N8X",
+            "dirCode": "I",
+            "fromSeq": 29,
+            "toSeq": 36
+          }
+        ]
       }
-    ],
-    "from": {
-      "stop_id": "001273",
-      "name": "Taikoo Place, King's Road",
-      "lat": 22.286667942091,
-      "lon": 114.21039739053
-    },
-    "to": {
-      "stop_id": "001282",
-      "name": "New Trend Plaza, King's Road",
-      "lat": 22.289909792091,
-      "lon": 114.19515688053
-    }
+    ]
   },
   {
     "id": "london",

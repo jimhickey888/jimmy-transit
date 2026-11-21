@@ -64,32 +64,71 @@ KMB_ROUTES = [
      "bookmarks": [4]},
 ]
 
-# --- Taikoo Place -> New Trend Plaza page --------------------------------
-# Routes whose stop order passes Taikoo Place (001273) before New Trend
-# Plaza (001282). `dirCode` is only for reference; the app matches by seq.
-SEGMENT_ROUTES = [
-    {"code": "77", "route": "77", "dirCode": "I", "fromSeq": 19, "toSeq": 26},
-    {"code": "81", "route": "81", "dirCode": "O", "fromSeq": 24, "toSeq": 32},
-    {"code": "81A", "route": "81A", "dirCode": "O", "fromSeq": 19, "toSeq": 26},
-    {"code": "85", "route": "85", "dirCode": "O", "fromSeq": 23, "toSeq": 30},
-    {"code": "85A", "route": "85A", "dirCode": "O", "fromSeq": 12, "toSeq": 20},
-    {"code": "8H", "route": "8H", "dirCode": "O", "fromSeq": 27, "toSeq": 34},
-    {"code": "99", "route": "99", "dirCode": "I", "fromSeq": 19, "toSeq": 26},
-    {"code": "N8X", "route": "N8X", "dirCode": "O", "fromSeq": 25, "toSeq": 33},
-]
+# --- Taikoo Place <-> New Trend Plaza page ------------------------------
+# Each entry is one direction, with the stop order and all routes serving
+# it. `dirCode` is only for reference; the app matches by seq.
+SEGMENT_FORWARD = {
+    "id": "to_new_trend",
+    "from": {
+        "stop_id": "001273",
+        "name": "Taikoo Place, King's Road",
+        "lat": 22.286667942091,
+        "lon": 114.21039739053,
+    },
+    "to": {
+        "stop_id": "001282",
+        "name": "New Trend Plaza, King's Road",
+        "lat": 22.289909792091,
+        "lon": 114.19515688053,
+    },
+    "routes": [
+        {"code": "77", "route": "77", "dirCode": "I", "fromSeq": 19, "toSeq": 26},
+        {"code": "81", "route": "81", "dirCode": "O", "fromSeq": 24, "toSeq": 32},
+        {"code": "81A", "route": "81A", "dirCode": "O", "fromSeq": 19, "toSeq": 26},
+        {"code": "85", "route": "85", "dirCode": "O", "fromSeq": 23, "toSeq": 30},
+        {"code": "85A", "route": "85A", "dirCode": "O", "fromSeq": 12, "toSeq": 20},
+        {"code": "8H", "route": "8H", "dirCode": "O", "fromSeq": 27, "toSeq": 34},
+        {"code": "99", "route": "99", "dirCode": "I", "fromSeq": 19, "toSeq": 26},
+        {"code": "N8X", "route": "N8X", "dirCode": "O", "fromSeq": 25, "toSeq": 33},
+    ],
+}
 
-SEGMENT_FROM = {
-    "stop_id": "001273",
-    "name": "Taikoo Place, King's Road",
-    "lat": 22.286667942091,
-    "lon": 114.21039739053,
+# Eastbound buses do not use the same poles: the nearest departure stop to
+# New Trend Plaza is Tin Chong Street, and the nearest arrival stop to
+# Taikoo Place is Sunway Gardens.
+SEGMENT_REVERSE = {
+    "id": "to_taikoo",
+    "from": {
+        "stop_id": "001261",
+        "name": "Tin Chong Street, King's Road",
+        "lat": 22.290056622091,
+        "lon": 114.19505769053,
+    },
+    "to": {
+        "stop_id": "001268",
+        "name": "Sunway Gardens, King's Road",
+        "lat": 22.285544382091,
+        "lon": 114.21133814053,
+    },
+    "routes": [
+        {"code": "102", "route": "102", "dirCode": "I", "fromSeq": 23, "toSeq": 29},
+        {"code": "106", "route": "106", "dirCode": "I", "fromSeq": 21, "toSeq": 27},
+        {"code": "116", "route": "116", "dirCode": "I", "fromSeq": 25, "toSeq": 31},
+        {"code": "15A", "route": "15A", "dirCode": "I", "fromSeq": 25, "toSeq": 32},
+        {"code": "2", "route": "2", "dirCode": "I", "fromSeq": 17, "toSeq": 24},
+        {"code": "2A", "route": "2A", "dirCode": "I", "fromSeq": 8, "toSeq": 15},
+        {"code": "307P", "route": "307P", "dirCode": "O", "fromSeq": 3, "toSeq": 9},
+        {"code": "678", "route": "678", "dirCode": "I", "fromSeq": 5, "toSeq": 11},
+        {"code": "77", "route": "77", "dirCode": "O", "fromSeq": 16, "toSeq": 23},
+        {"code": "81", "route": "81", "dirCode": "I", "fromSeq": 9, "toSeq": 16},
+        {"code": "8H", "route": "8H", "dirCode": "I", "fromSeq": 8, "toSeq": 15},
+        {"code": "99", "route": "99", "dirCode": "O", "fromSeq": 21, "toSeq": 28},
+        {"code": "N122", "route": "N122", "dirCode": "I", "fromSeq": 27, "toSeq": 33},
+        {"code": "N8X", "route": "N8X", "dirCode": "I", "fromSeq": 29, "toSeq": 36},
+    ],
 }
-SEGMENT_TO = {
-    "stop_id": "001282",
-    "name": "New Trend Plaza, King's Road",
-    "lat": 22.289909792091,
-    "lon": 114.19515688053,
-}
+
+SEGMENT_DIRECTIONS = [SEGMENT_FORWARD, SEGMENT_REVERSE]
 
 # --- London page (TfL) ----------------------------------------------------
 # Fixed TfL StopPoint IDs; the second item is the label shown in the app.
@@ -369,26 +408,22 @@ def main():
             "stops": stops,
         })
 
-    segment = [
+    segment_directions = [
         {
-            "code": route["code"],
-            "route": route["route"],
-            "dirCode": route["dirCode"],
-            "fromSeq": route["fromSeq"],
-            "toSeq": route["toSeq"],
-            "from": dict(SEGMENT_FROM),
-            "to": dict(SEGMENT_TO),
+            "id": direction["id"],
+            "from": dict(direction["from"]),
+            "to": dict(direction["to"]),
+            "routes": [dict(route) for route in direction["routes"]],
         }
-        for route in SEGMENT_ROUTES
+        for direction in SEGMENT_DIRECTIONS
     ]
 
     pages = [
         {"id": "citybus", "title": "Citybus", "api": "ctb", "routes": citybus},
         {"id": "kmb", "title": "KMB", "api": "kmb", "routes": kmb},
         {"id": "minibus", "title": "Minibuses", "api": "gmb", "routes": minibus},
-        {"id": "segment", "title": "Taikoo", "subtitle": "→ New Trend Plaza · 8 routes",
-         "api": "segment", "routes": segment,
-         "from": dict(SEGMENT_FROM), "to": dict(SEGMENT_TO)},
+        {"id": "segment", "title": "Taikoo", "subtitle": "↔ New Trend Plaza · both directions",
+         "api": "segment", "directions": segment_directions},
         {"id": "london", "title": "London", "subtitle": "57 · 131 · 93 · London time",
          "api": "tfl", "routes": london,
          "stopOrder": ["Darlaston Road", "Wimbledon Station", "Francis Grove"]},
@@ -402,17 +437,23 @@ def main():
 
     for page in pages:
         print(page["title"])
+        if page["api"] == "segment":
+            for direction in page["directions"]:
+                print(
+                    f"  {direction['id']}: {direction['from']['name']}"
+                    f" -> {direction['to']['name']}"
+                )
+                for route in direction["routes"]:
+                    print(
+                        f"    {route['code']:<5} seq {route['fromSeq']}"
+                        f" -> {route['toSeq']}"
+                    )
+            continue
         for route in page["routes"]:
-            if page["api"] == "segment":
-                print(
-                    f"  {route['code']:<4} Taikoo seq {route['fromSeq']}"
-                    f" -> New Trend seq {route['toSeq']}"
-                )
-            else:
-                print(
-                    f"  {route['code']:<4} {len(route['stops']):>2} stops;",
-                    [(b["seq"], b["name"]) for b in route["bookmarks"]],
-                )
+            print(
+                f"  {route['code']:<4} {len(route['stops']):>2} stops;",
+                [(b["seq"], b["name"]) for b in route["bookmarks"]],
+            )
 
 
 if __name__ == "__main__":
