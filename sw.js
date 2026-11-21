@@ -1,6 +1,6 @@
 /* App-shell cache. Live ETA requests always go to the network. */
 
-const CACHE = 'bus-times-v29';
+const CACHE = 'bus-times-v30';
 const SHELL = [
   './',
   './index.html',
@@ -15,7 +15,11 @@ const SHELL = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()),
+    caches.open(CACHE)
+      /* Always bypass the HTTP cache when refreshing the shell, otherwise a
+         ten-minute Pages cache can be baked into a new app-shell version. */
+      .then((cache) => cache.addAll(SHELL.map((url) => new Request(url, { cache: 'reload' }))))
+      .then(() => self.skipWaiting()),
   );
 });
 
