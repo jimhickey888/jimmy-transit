@@ -1,6 +1,6 @@
 /* App-shell cache. Live ETA requests always go to the network. */
 
-const CACHE = 'bus-times-v26';
+const CACHE = 'bus-times-v27';
 const SHELL = [
   './',
   './index.html',
@@ -57,7 +57,7 @@ self.addEventListener('push', (event) => {
   }
   const title = data.title || 'Bus arriving soon';
   event.waitUntil(self.registration.showNotification(title, {
-    body: data.body || 'Tap to open Jimmy Bus Tracker.',
+    body: data.body || 'Tap to open Jimmy Transit Tracker.',
     icon: './icons/icon-192.png',
     badge: './icons/icon-192.png',
     tag: data.tag || 'bus-alert',

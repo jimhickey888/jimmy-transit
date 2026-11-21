@@ -1,4 +1,4 @@
-# Jimmy Bus Tracker
+# Jimmy Transit Tracker
 
 A one-screen-per-page iPhone web app showing the next arrivals for the
 buses around Braemar Hill and in Wimbledon, London, in six swipeable

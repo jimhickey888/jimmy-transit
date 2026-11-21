@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.0.3';
-const APP_BUILD = '22 Nov 2026, 02:05 HKT';
+const APP_VERSION = '2.0.4';
+const APP_BUILD = '22 Nov 2026, 02:12 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -1346,7 +1346,7 @@ function syncChrome() {
     ? [...new Set(page.routes.map((r) => r.code))]
     : [];
   document.getElementById('sub').textContent = page.subtitle || codes.join(' · ');
-  document.title = `${page.title} · Jimmy Bus Tracker`;
+  document.title = `${page.title} · Jimmy Transit Tracker`;
 
   const dots = document.querySelectorAll('.pdot');
   dots.forEach((dot, i) => {
