@@ -12,8 +12,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.7.0';
-const APP_BUILD = '22 Nov 2026, 03:53 HKT';
+const APP_VERSION = '2.7.1';
+const APP_BUILD = '22 Nov 2026, 03:56 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -499,8 +499,15 @@ async function fetchSegment(direction, route) {
       at: Date.now(),
     });
   } catch (err) {
-    const failed = { enabled: false, desc: 'Citybus feed unavailable', list: [] };
-    state.segments.set(key, { from: failed, to: failed, at: Date.now() });
+    /* Keep the last good lists rather than blanking the page; the status
+       line already reports the connection problem. */
+    const previous = state.segments.get(key);
+    if (previous) {
+      state.segments.set(key, { ...previous, stale: true });
+    } else {
+      const failed = { enabled: false, desc: 'Citybus feed unavailable', list: [] };
+      state.segments.set(key, { from: failed, to: failed, at: Date.now() });
+    }
     throw err;
   }
 }
@@ -1918,6 +1925,10 @@ function init() {
   render();
 
   document.getElementById('refresh').addEventListener('click', () => refresh(true));
+
+  /* Unlock WebAudio on the first tap so a countdown restored from a previous
+     launch can beep without tapping the tracked arrival again. */
+  document.addEventListener('pointerdown', unlockAudio, { once: true, passive: true });
 
   document.getElementById('tracked').addEventListener('click', (event) => {
     const button = event.target.closest('[data-tracked]');
