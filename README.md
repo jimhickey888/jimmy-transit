@@ -86,9 +86,11 @@ poles serve more than one direction.
   arrival or the `×` to stop. The choice survives refreshes and reloads.
 - The tracked bar has a **Keep screen on** chip (Wake Lock) so the display
   stays awake while you watch a bus approach.
-- With the optional push worker deployed, the same bar has an **Alert
-  5 min before** chip: one Web Push notification per tracked bus, with the
-  route, stop and stop ID. See `worker/README.md`.
+- With the optional push worker deployed, the same bar has an **Alerts
+  10 → 0 min** chip: Web Push notifications at **10, 8, 6, 4, 2 and 0
+  minutes** before the bus, each with the route, stop and stop ID. The app
+  beeps and flashes the countdown at the same six points. See
+  `worker/README.md`.
 - Where the operator publishes a vehicle ID (TfL), each arrival also shows
   the fleet bus ID.
 - Arrivals are grouped by **stop and direction**, not by route: each stop
@@ -133,7 +135,7 @@ at zero, and clears itself two minutes after the bus is due.
 iOS has no scheduled local notifications for web apps, and a service worker
 cannot wake itself, so a notification while the phone is locked needs a
 push sender. `worker/` is a small Cloudflare Worker (free plan) that stores
-one alert per tracked bus in KV and sends it five minutes before departure
+one alert per milestone (10, 8, 6, 4, 2 and 0 minutes) in KV and sends each
 from a one-minute cron trigger.
 
 This one is deployed at
@@ -149,10 +151,13 @@ Limits to expect:
   after the user allows notifications from a tap.
 - Delivery is best effort: Low Power Mode, Focus and notification summaries
   can delay or group it by a few minutes.
-- It sends **one** notification per tracked bus, five minutes before it is
-  due — not a repeating every-minute stream, which iOS would throttle.
-- If the bus is already under five minutes away, the chip declines to arm
-  the alert instead of sending it immediately.
+- It sends **six** notifications per tracked bus — 10, 8, 6, 4, 2 and 0
+  minutes before it is due. Milestones already in the past when you tap the
+  chip are skipped, so tracking a bus 7 minutes out arms 6, 4, 2 and 0.
+- If the bus is under two minutes away there is nothing left to schedule, so
+  the chip says **Under 2 min away**.
+- iOS may group or briefly delay consecutive notifications, especially in
+  Focus or Low Power Mode.
 
 ## Run it locally
 

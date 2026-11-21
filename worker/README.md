@@ -1,6 +1,7 @@
 # Jimmy Transit push worker
 
-Sends **one Web Push notification five minutes before a tracked bus is due**.
+Sends **Web Push notifications at 10, 8, 6, 4, 2 and 0 minutes before a
+tracked bus is due** — one alert record per milestone, fired by the cron.
 It is a single Cloudflare Worker (free plan is enough) with a KV namespace
 and a one-minute cron trigger. The app itself stays static on GitHub Pages.
 
@@ -78,16 +79,17 @@ signature. All checks should pass.
 
 1. The app must be on the Home Screen (iOS only allows web push there), and
    the worker URL must be set in `app.js` and deployed.
-2. Tap an arrival to track it, then tap **Alert 5 min before** and allow
-   notifications.
-3. The chip turns green (**Alert on · 5 min**). Tap it again to cancel.
-4. Notification text looks like `85 in 5 min` / `Healthy Village · Stop
-   001276 · → North Point`.
+2. Tap an arrival to track it, then tap **Alerts 10 → 0 min** and allow
+   notifications (tap the chip once more after the permission prompt).
+3. The chip turns green (**Alerts on · 10→0**). Tap it again to cancel.
+4. Notifications look like `85 in 10 min`, `85 in 8 min`, …, `85 due now`,
+   each with `Healthy Village · Stop 001276 · → North Point`.
 
 Notes and limits:
 
-- Alerts are only armed while the arrival is more than ~5 minutes away;
-  closer than that the chip says **Under 5 min away** and nothing is sent.
+- Milestones already in the past are skipped, so tracking a bus 7 minutes
+  out arms 6, 4, 2 and 0. Under two minutes the chip says **Under 2 min
+  away** and nothing is scheduled.
 - iOS delivery is best effort. Low Power Mode, Focus and notification
   summaries can delay or group a notification; the worker cannot guarantee
   a minute-accurate delivery.

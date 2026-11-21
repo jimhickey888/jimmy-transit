@@ -10,14 +10,17 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.0.5';
-const APP_BUILD = '22 Nov 2026, 02:18 HKT';
+const APP_VERSION = '2.1.0';
+const APP_BUILD = '22 Nov 2026, 02:17 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
 const PUSH_ENDPOINT = 'https://jimmy-transit-push.jimhickey.workers.dev';
 const PUSH_VAPID_KEY = 'BCPXl_A_ZsChEqNNcVJgMpjKCvKXUlpFE1-TQlxoPgYxLOUDX09V49xnJ4U6DKK1BS80-upzWIAB3aOBNeyC2DM';
-const PUSH_LEAD_MIN = 5;
+/* Alerts are scheduled at these minutes before departure (0 = due). */
+const ALERT_MINUTES = [10, 8, 6, 4, 2, 0];
+/* In-app beeps happen at the same points, in seconds before departure. */
+const IN_APP_MARKS = [600, 480, 360, 240, 120, 0];
 
 const TRACK_KEY = 'jimmy.tracked.v1';
 const PREFS_KEY = 'jimmy.prefs.v1';
@@ -775,17 +778,18 @@ function infoHtml() {
       <h2>Countdown</h2>
       <p class="info-note">
         Tap any arrival to pin a countdown under the status line. It ticks every
-        second with the arrival time underneath, beeps one minute before and at
-        zero, and clears itself shortly after the bus is due. Tap the same
-        arrival again, or the ×, to stop tracking.
+        second with the arrival time underneath, beeps and flashes at 10, 8, 6,
+        4, 2 and 0 minutes, and clears itself shortly after the bus is due. Tap
+        the same arrival again, or the ×, to stop tracking.
       </p>
     </section>
     <section class="info-block">
       <h2>Alerts</h2>
       <p class="info-note">
-        With push set up, the alert chip on a tracked arrival sends one
-        notification 5 minutes before departure. iOS only allows web push for
-        apps added to the Home Screen, and delivery is best effort.
+        With push set up, the alert chip schedules notifications at 10, 8, 6,
+        4, 2 and 0 minutes before departure. In the app the same milestones
+        beep and flash the countdown. iOS only allows web push for apps added
+        to the Home Screen, and delivery is best effort.
       </p>
     </section>
     <p class="info-note">
@@ -952,6 +956,7 @@ function syncTracked() {
   if (!best) return;
 
   const shifted = Math.abs(best.ms - t.targetMs) > 1000;
+  const previous = t.targetMs;
   t.targetMs = best.ms;
   t.timestamp = best.entry.timestamp;
   t.timeZone = best.entry.timeZone || t.timeZone;
@@ -959,9 +964,10 @@ function syncTracked() {
   t.vehicle = best.entry.vehicle || '';
   saveTracked();
 
-  if (shifted && t.alert && t.alert.active) {
-    const fireAt = t.targetMs - t.alert.lead * 60000;
-    if (Math.abs(fireAt - t.alert.fireAt) > 60000) rescheduleAlert();
+  /* Only re-arm when the prediction really moved, otherwise the app would
+     rewrite six alerts every 30 seconds. */
+  if (shifted && t.alert && t.alert.active && Math.abs(best.ms - previous) > 60000) {
+    rescheduleAlert();
   }
 }
 
@@ -974,16 +980,33 @@ async function rescheduleAlert() {
   } catch { /* keep the old schedule */ }
 }
 
+function alertPlan(targetMs) {
+  const now = Date.now();
+  return ALERT_MINUTES
+    .map((minutes) => ({ minutes, fireAt: targetMs - minutes * 60000 }))
+    .filter((step) => step.fireAt > now + 20000);
+}
+
+/* Marks already in the past when tracking starts must not beep. */
+function resetBeeps(targetMs) {
+  const left = targetMs - Date.now();
+  const fired = {};
+  for (const mark of IN_APP_MARKS) {
+    if (left <= mark * 1000) fired[mark] = true;
+  }
+  return fired;
+}
+
 function toggleTracked(pill) {
   if (!pill) return;
   if (isTrackedPill(pill)) {
     clearTracked();
     return;
   }
-  /* Switching to another bus must cancel the previous pending alert,
-     otherwise it would still arrive for a bus you no longer track. */
+  /* Switching to another bus must cancel the previous pending alerts,
+     otherwise they would still arrive for a bus you no longer track. */
   if (state.tracked && state.tracked.alert && state.tracked.alert.active) {
-    cancelAlert(state.tracked.alert.id);
+    cancelAlert(state.tracked.alert.ids);
   }
   state.tracked = {
     routeCode: pill.routeCode,
@@ -998,24 +1021,23 @@ function toggleTracked(pill) {
     scheduled: !!pill.scheduled,
     vehicle: pill.vehicle || '',
     screenOn: !!state.prefs.screenOn,
+    beep: true,
     alert: null,
   };
-  state.beeps = {};
+  state.beeps = resetBeeps(pill.targetMs);
   unlockAudio();
   saveTracked();
   render();
   applyWakeLock();
-  if (pushConfigured() && Notification.permission === 'granted') {
-    const left = state.tracked.targetMs - Date.now();
-    if (left > PUSH_LEAD_MIN * 60000 + 45000) {
-      ensurePushSubscription().then(scheduleAlert).catch(() => {});
-    }
+  if (pushConfigured() && Notification.permission === 'granted'
+      && alertPlan(pill.targetMs).length) {
+    ensurePushSubscription().then(scheduleAlert).catch(() => {});
   }
 }
 
 function clearTracked() {
   const t = state.tracked;
-  if (t && t.alert && t.alert.active) cancelAlert(t.alert.id);
+  if (t && t.alert && t.alert.active) cancelAlert(t.alert.ids);
   state.tracked = null;
   state.beeps = {};
   saveTracked();
@@ -1034,11 +1056,10 @@ function fmtCountdown(ms) {
 }
 
 function alertChipLabel(t) {
-  if (t.alert && t.alert.active) return `Alert on · ${t.alert.lead} min`;
+  if (t.alert && t.alert.active) return 'Alerts on · 10→0';
   if (!pushSupported()) return 'Alerts need Home Screen';
   if (typeof Notification !== 'undefined' && Notification.permission === 'denied') return 'Alerts blocked';
-  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') return `Alert ${PUSH_LEAD_MIN} min before`;
-  return `Alert ${PUSH_LEAD_MIN} min before`;
+  return 'Alerts 10 → 0 min';
 }
 
 function trackedHtml(t) {
@@ -1095,13 +1116,16 @@ function tickTracked() {
   document.getElementById('tracked').classList.toggle('urgent', left <= 60000);
 
   if (t.beep) {
-    if (!state.beeps.min && left > 0 && left <= 60000) {
-      state.beeps.min = true;
-      beep(2);
+    let crossed = null;
+    for (const mark of IN_APP_MARKS) {
+      if (!state.beeps[mark] && left <= mark * 1000) {
+        state.beeps[mark] = true;
+        crossed = mark;
+      }
     }
-    if (!state.beeps.due && left <= 0) {
-      state.beeps.due = true;
-      beep(3);
+    if (crossed !== null) {
+      beep(crossed === 0 ? 3 : 2);
+      pulseTracked();
     }
   }
 
@@ -1109,6 +1133,19 @@ function tickTracked() {
 }
 
 let flashTimer = null;
+let pulseTimer = null;
+
+/* Briefly flash the tracked bar when a countdown milestone passes. */
+function pulseTracked() {
+  const bar = document.getElementById('tracked');
+  if (!bar) return;
+  bar.classList.remove('pulse');
+  void bar.offsetWidth;
+  bar.classList.add('pulse');
+  clearTimeout(pulseTimer);
+  pulseTimer = setTimeout(() => bar.classList.remove('pulse'), 1600);
+}
+
 function flashChip(text) {
   const chip = document.querySelector('#tracked .chip[data-tracked="alert"]');
   if (!chip) return;
@@ -1238,16 +1275,16 @@ async function armAlert() {
   }
 
   if (t.alert && t.alert.active) {
-    cancelAlert(t.alert.id);
+    cancelAlert(t.alert.ids);
     t.alert = null;
     saveTracked();
     renderTracked();
     return;
   }
 
-  const left = t.targetMs - Date.now();
-  if (left <= PUSH_LEAD_MIN * 60000 + 45000) {
-    flashChip(`Under ${PUSH_LEAD_MIN} min away`);
+  const plan = alertPlan(t.targetMs);
+  if (!plan.length) {
+    flashChip('Under 2 min away');
     return;
   }
 
@@ -1275,40 +1312,66 @@ async function armAlert() {
   }
 }
 
+function alertBody(t) {
+  return [t.stopName, t.stopId ? `Stop ${t.stopId}` : '', t.direction]
+    .filter(Boolean).join(' · ');
+}
+
+/* One alert per milestone still ahead: 10, 8, 6, 4, 2 and 0 minutes.
+   The worker stores them separately and its cron sends each in turn. */
 async function scheduleAlert(sub) {
   const t = state.tracked;
   if (!t) return;
-  const lead = PUSH_LEAD_MIN;
-  const fireAt = t.targetMs - lead * 60000;
-  const id = (t.alert && t.alert.id)
-    || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-  const body = {
-    subscription: sub && sub.toJSON ? sub.toJSON() : sub,
-    alert: {
-      id,
-      fireAt,
-      leadMinutes: lead,
-      title: `${t.routeCode} in ${lead} min`,
-      body: [t.stopName, t.stopId ? `Stop ${t.stopId}` : '', t.direction]
-        .filter(Boolean).join(' · '),
-      tag: `bus-${id}`,
-    },
-  };
-  const res = await fetch(`${PUSH_ENDPOINT}/alert`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  t.alert = { id, lead, fireAt, active: true };
+
+  const plan = alertPlan(t.targetMs);
+  const group = (t.alert && t.alert.group)
+    || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const subscription = sub && sub.toJSON ? sub.toJSON() : sub;
+  const body = alertBody(t);
+  const ids = [];
+
+  for (const step of plan) {
+    const id = `${group}-${step.minutes}`;
+    ids.push(id);
+    const res = await fetch(`${PUSH_ENDPOINT}/alert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscription,
+        alert: {
+          id,
+          fireAt: step.fireAt,
+          leadMinutes: step.minutes,
+          title: step.minutes === 0
+            ? `${t.routeCode} due now`
+            : `${t.routeCode} in ${step.minutes} min`,
+          body,
+          tag: id,
+        },
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  }
+
+  /* Drop milestones that no longer exist after the prediction moved. */
+  if (t.alert && Array.isArray(t.alert.ids)) {
+    for (const old of t.alert.ids) {
+      if (!ids.includes(old)) cancelAlert(old);
+    }
+  }
+
+  t.alert = { group, ids, minutes: plan.map((step) => step.minutes), active: true };
   saveTracked();
   renderTracked();
 }
 
-function cancelAlert(id) {
-  if (!pushConfigured() || !id) return;
-  fetch(`${PUSH_ENDPOINT}/alert?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
-    .catch(() => {});
+function cancelAlert(ids) {
+  if (!pushConfigured() || !ids) return;
+  const list = Array.isArray(ids) ? ids : [ids];
+  for (const id of list) {
+    fetch(`${PUSH_ENDPOINT}/alert?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+      .catch(() => {});
+  }
 }
 
 /* Re-arm an existing alert when the app opens, so a stale fire time is

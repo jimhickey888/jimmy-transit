@@ -804,3 +804,14 @@ h1 {
 .eta.due.tracked { outline-color: #fff; }
 
 .info-block .info-note { margin-top: 0; }
+
+/* Countdown milestone flash. */
+.tracked.pulse {
+  animation: tracked-pulse 1.6s ease-out;
+}
+
+@keyframes tracked-pulse {
+  0% { border-color: var(--green); box-shadow: 0 0 0 2px var(--green), var(--shadow); }
+  60% { border-color: var(--green); box-shadow: 0 0 0 2px var(--green-soft), var(--shadow); }
+  100% { border-color: var(--line); box-shadow: var(--shadow); }
+}
