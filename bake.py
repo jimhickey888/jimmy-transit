@@ -425,6 +425,7 @@ def main():
              "New Trend Plaza, King's Road",
              "Hanking Court, Cloud View Road",
              "Kiangsu-Chekiang College, Braemar Hill Road",
+             "Healthy Village, King's Road",
              "Flora Garden, Cloud View Road",
              "Central Ferry - Discovery Bay Ferry, Man Kwong Street",
              "Exhibition Centre Station",
