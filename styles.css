@@ -859,9 +859,17 @@ h1 {
 }
 
 .call-time {
-  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.call-date {
+  font-size: 10px;
+  opacity: 0.85;
 }
 
 .call-foot {

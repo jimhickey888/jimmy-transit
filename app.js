@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.5.1';
-const APP_BUILD = '22 Nov 2026, 03:24 HKT';
+const APP_VERSION = '2.5.2';
+const APP_BUILD = '22 Nov 2026, 03:31 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -936,15 +936,32 @@ function segmentHtml(page) {
   return html;
 }
 
+/* Time of day, plus a short date when the call was not made today. */
+function callTimeParts(ms) {
+  const when = new Date(ms);
+  const now = new Date();
+  const today = when.getFullYear() === now.getFullYear()
+    && when.getMonth() === now.getMonth()
+    && when.getDate() === now.getDate();
+  return {
+    time: fmtTime(when),
+    day: today ? '' : when.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+  };
+}
+
 function callsHtml() {
   const rows = API_ROWS.map((label) => {
     const session = state.calls.get(label);
     const total = state.installCalls.get(label);
     const last = (total && total.last) || (session && session.last);
+    const when = last ? callTimeParts(last) : null;
+    const timeHtml = when
+      ? `<span>${esc(when.time)}</span>${when.day ? `<span class="call-date">${esc(when.day)}</span>` : ''}`
+      : '—';
     return `<div class="call-row"><span class="call-name">${esc(label)}</span>`
       + `<strong>${session ? session.count : 0}</strong>`
       + `<strong>${total ? total.count : 0}</strong>`
-      + `<span class="call-time">${last ? esc(fmtTime(new Date(last))) : '—'}</span></div>`;
+      + `<span class="call-time">${timeHtml}</span></div>`;
   }).join('');
 
   const sum = (map) => API_ROWS.reduce((n, label) => {

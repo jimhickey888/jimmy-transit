@@ -63,7 +63,8 @@ Court”, not “Hangking”).
 **Info** — lists the live-data endpoints, app version and build date/time,
 and API call counts for Citybus, KMB, Minibuses, TfL and the push worker:
 **Launch** (since this launch) and **Install** (stored on the device across
-relaunches), each with the time of the last call. Only real network requests
+relaunches), each with the time of the last call — a short date appears
+underneath when the last call was not made today. Only real network requests
 are counted, so cache hits are free.
 
 Live data comes from the Transport Department's **eTA GMB** API
