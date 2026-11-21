@@ -80,8 +80,10 @@ poles serve more than one direction.
 - **Citybus** and **Taikoo** load with the app and refresh every 30 s.
   **KMB**, **Minibuses** and **London** fetch their first data only when
   you swipe to them (one request per route + stop for KMB/GMB, one per TfL
-  line), then join the normal 30-second refresh. This keeps the initial
-  load to the Hong Kong feeds you look at first.
+  line). After that they refresh every 30 s **while that page is on
+  screen**, and refetch immediately when you return to them after more than
+  ten seconds. A tracked bus keeps its own page refreshing wherever you
+  are.
 - Shows the next 3 buses for each saved stop, with a large countdown and
   the actual arrival clock time with seconds underneath (e.g. `12 min`
   above `21:48:30`).
@@ -110,11 +112,17 @@ poles serve more than one direction.
   (GPS-based) predictions, and blue entries are **scheduled** times. Live
   data is shown wherever the operator publishes it; scheduled times fill the
   remaining slots.
-- Refreshes every 30 seconds while the screen is open.
+- Refreshes every 30 seconds while the screen is open (see the loading
+  notes above for which pages refresh when).
+- Remembers the last page you were on, and paints the last good arrivals
+  from a local snapshot on relaunch (`Cached · updating…`) until the first
+  live refresh lands, so a cold start is never blank.
 - Uses your location to highlight the nearest stop *on the page you are
   looking at* in a strip at the top, and to show the straight-line distance
-  to every saved stop in its heading. Location is optional — the saved
-  stops always work.
+  to every saved stop in its heading. Network-level accuracy is used, since
+  only straight-line distances are shown; nearest-stop times are only
+  fetched for pages whose data is already loaded. Location is optional —
+  the saved stops always work.
 - Installable to the Home Screen; runs full-screen with its own icon.
 - Works in light and dark mode.
 

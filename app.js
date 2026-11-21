@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.2.0';
-const APP_BUILD = '22 Nov 2026, 02:43 HKT';
+const APP_VERSION = '2.3.0';
+const APP_BUILD = '22 Nov 2026, 02:55 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -24,6 +24,12 @@ const IN_APP_MARKS = [600, 480, 360, 240, 120, 0];
 
 const TRACK_KEY = 'jimmy.tracked.v1';
 const PREFS_KEY = 'jimmy.prefs.v1';
+const SNAP_KEY = 'jimmy.snapshot.v1';
+const PAGE_KEY = 'jimmy.page.v1';
+/* How long the last good arrivals are accepted as a first paint. */
+const SNAP_MAX_AGE = 15 * 60 * 1000;
+/* Re-fetch a visited page if it has not been updated for this long. */
+const PAGE_STALE_MS = 10000;
 
 PAGES.push({
   id: 'info',
@@ -64,6 +70,9 @@ const state = {
   tracked: loadTracked(),
   prefs: loadPrefs(),
   loaded: new Set(),   // pages whose data has been fetched at least once
+  pageUpdated: new Map(), // page id -> last successful page fetch
+  fromCache: false,    // painting the snapshot while the first refresh runs
+  savedPage: -1,
   pills: new Map(),    // render-scoped id -> tapped arrival
   pillSeq: 0,
   beeps: {},
@@ -188,12 +197,16 @@ function ctbStopEta(stopId) {
    response per line keeps the London page well inside TfL's
    unauthenticated rate limit. */
 const TFL_LINE_TTL = 20000;
+const TFL_BACKOFF_MS = 60000;
+let tflBackoffUntil = 0;
 const tflLines = new Map(); // line -> { at, promise }
 
 function tflLineArrivals(line) {
   const now = Date.now();
   const hit = tflLines.get(line);
   if (hit && now - hit.at < TFL_LINE_TTL) return hit.promise;
+  /* After a 429, stop hammering TfL and keep the last good arrivals. */
+  if (now < tflBackoffUntil && hit && hit.rows) return Promise.resolve(hit.rows);
 
   const entry = { at: now, rows: hit ? hit.rows : null, promise: null };
   const controller = new AbortController();
@@ -202,10 +215,15 @@ function tflLineArrivals(line) {
   const load = (attempt) => getJson(`${TFL_API}/Line/${line}/Arrivals`, controller.signal)
     .then((rows) => (Array.isArray(rows) ? rows : []))
     .catch((err) => {
+      if (/429/.test(String(err && err.message))) {
+        tflBackoffUntil = Date.now() + TFL_BACKOFF_MS;
+        if (entry.rows) return entry.rows;
+        throw err;
+      }
       if (attempt === 0) {
         return new Promise((resolve) => setTimeout(resolve, 2000)).then(() => load(1));
       }
-      /* If TfL rate-limits us, keep showing the last good data. */
+      /* Any other failure: keep showing the last good data. */
       if (entry.rows) return entry.rows;
       throw err;
     });
@@ -225,7 +243,23 @@ function tflLineArrivals(line) {
   return entry.promise;
 }
 
-async function fetchEta(page, route, stop) {
+/* GMB and KMB have no server-side batching, so a first-visit page fetch can
+   race the 30 s refresh. Share the in-flight promise per route + stop. */
+const etaInflight = new Map();
+
+function fetchEta(page, route, stop) {
+  if (page.api !== 'gmb' && page.api !== 'kmb') return fetchEtaLive(page, route, stop);
+  const key = keyOf(page, route, stop);
+  const hit = etaInflight.get(key);
+  if (hit) return hit;
+  const promise = fetchEtaLive(page, route, stop).finally(() => {
+    if (etaInflight.get(key) === promise) etaInflight.delete(key);
+  });
+  etaInflight.set(key, promise);
+  return promise;
+}
+
+async function fetchEtaLive(page, route, stop) {
   const key = keyOf(page, route, stop);
 
   if (page.api === 'gmb') {
@@ -406,20 +440,45 @@ function pageJobs(page) {
   return [...jobs.values()];
 }
 
-/* First visit: fetch just this page's stops, so the initial app load stays
-   limited to Citybus and Taikoo. */
-async function loadPage(page) {
-  if (!page || page.api === 'info' || pageIsLoaded(page)) return;
-  state.loaded.add(page.id);
-  renderPage(page);
-
+/* Fetch just one page's stops: on first visit, or when it goes stale. */
+async function fetchPage(page) {
+  state.pageUpdated.set(page.id, Date.now());
   const results = await Promise.allSettled(
     pageJobs(page).map(({ page: owner, route, stop }) => fetchEta(owner, route, stop)),
   );
   if (results.some((result) => result.status === 'fulfilled')) {
     state.lastUpdate = new Date();
+    state.fromCache = false;
+    saveSnapshot();
   }
   render();
+}
+
+/* First visit: fetch only this page, so the initial app load stays limited
+   to Citybus and Taikoo. */
+async function loadPage(page) {
+  if (!page || page.api === 'info' || pageIsLoaded(page)) return;
+  state.loaded.add(page.id);
+  renderPage(page);
+  await fetchPage(page);
+}
+
+/* A visited page swiped back to should not wait for the 30 s tick. */
+function maybeRefreshPage(page) {
+  if (!pageIsLoaded(page) || pageIsEager(page) || page.api === 'info') return;
+  const at = state.pageUpdated.get(page.id) || 0;
+  if (Date.now() - at < PAGE_STALE_MS) return;
+  fetchPage(page);
+}
+
+/* Only the page being looked at (plus Citybus/Taikoo, and the page of a
+   tracked arrival) keeps polling in the background. */
+function pageIsLive(page) {
+  if (!pageIsLoaded(page)) return false;
+  if (pageIsEager(page)) return true;
+  if (state.tracked && state.tracked.pageId === page.id) return true;
+  const current = PAGES[state.page];
+  return Boolean(current && current.id === page.id);
 }
 
 async function refresh(force = false) {
@@ -435,7 +494,7 @@ async function refresh(force = false) {
   const jobs = new Map();
   const segmentJobs = [];
   for (const page of PAGES) {
-    if (!pageIsLoaded(page)) continue;
+    if (!pageIsLive(page)) continue;
     if (page.api === 'segment') {
       for (const direction of page.directions) {
         for (const route of direction.routes) {
@@ -459,6 +518,13 @@ async function refresh(force = false) {
   state.lastUpdate = new Date();
   state.busy = false;
   setBusy(false);
+  if (results.some((result) => result.status === 'fulfilled')) {
+    for (const page of PAGES) {
+      if (pageIsLive(page)) state.pageUpdated.set(page.id, Date.now());
+    }
+    state.fromCache = false;
+    saveSnapshot();
+  }
   render();
 }
 
@@ -493,6 +559,8 @@ async function updateNearest(pos) {
     state.nearest.set(page.id, next);
     if (!changed) continue;
 
+    if (!pageIsLoaded(page)) continue;
+
     const cached = state.etas.get(keyOf(page, next.route, next.stop));
     if (!cached || Date.now() - cached.at > REFRESH_MS - 5000) {
       pending.push(fetchEta(page, next.route, next.stop).catch(() => {
@@ -525,7 +593,7 @@ function startGeolocation() {
         render();
       }
     },
-    { enableHighAccuracy: true, maximumAge: 60000, timeout: 20000 },
+    { enableHighAccuracy: false, maximumAge: 120000, timeout: 20000 },
   );
 }
 
@@ -912,8 +980,8 @@ function renderStatus() {
     return;
   }
   if (!state.lastUpdate) {
-    dot.className = 'dot';
-    label.textContent = 'Connecting…';
+    dot.className = state.fromCache ? 'dot stale' : 'dot';
+    label.textContent = state.fromCache ? 'Cached · updating…' : 'Connecting…';
     return;
   }
 
@@ -925,7 +993,10 @@ function renderStatus() {
 function render() {
   state.pills.clear();
   state.pillSeq = 0;
-  for (const page of PAGES) renderPage(page);
+  for (const page of PAGES) {
+    if (!pageIsLoaded(page) && page.api !== 'info') continue;
+    renderPage(page);
+  }
   syncTracked();
   renderTracked();
   renderStatus();
@@ -962,6 +1033,36 @@ function saveTracked() {
 
 function savePrefs() {
   try { localStorage.setItem(PREFS_KEY, JSON.stringify(state.prefs)); } catch { /* ignore */ }
+}
+
+/* Keep the last good arrivals so a cold start paints immediately. */
+function saveSnapshot() {
+  if (!state.etas.size) return;
+  try {
+    const etas = [...state.etas.entries()].map(([key, value]) => [key, {
+      enabled: value.enabled,
+      desc: value.desc || '',
+      dest: value.dest || '',
+      list: value.list,
+      at: value.at,
+    }]);
+    localStorage.setItem(SNAP_KEY, JSON.stringify({ at: Date.now(), etas }));
+  } catch { /* quota or private mode */ }
+}
+
+function loadSnapshot() {
+  try {
+    const snap = JSON.parse(localStorage.getItem(SNAP_KEY) || 'null');
+    if (!snap || !Array.isArray(snap.etas)) return false;
+    if (Date.now() - Number(snap.at) > SNAP_MAX_AGE) return false;
+    for (const [key, value] of snap.etas) {
+      if (value && Array.isArray(value.list)) state.etas.set(key, value);
+    }
+    state.fromCache = state.etas.size > 0;
+    return state.fromCache;
+  } catch {
+    return false;
+  }
 }
 
 /* The tracked arrival lives in one of two caches: a normal stop group or a
@@ -1066,6 +1167,7 @@ function toggleTracked(pill) {
   state.beeps = resetBeeps(pill.targetMs);
   unlockAudio();
   saveTracked();
+  ensureTrackedTimer();
   render();
   applyWakeLock();
   if (pushConfigured() && Notification.permission === 'granted'
@@ -1080,6 +1182,7 @@ function clearTracked() {
   state.tracked = null;
   state.beeps = {};
   saveTracked();
+  ensureTrackedTimer();
   releaseWakeLock();
   render();
 }
@@ -1139,6 +1242,17 @@ function renderTracked() {
   bar.hidden = false;
   bar.innerHTML = trackedHtml(t);
   tickTracked();
+}
+
+let trackedTimer = null;
+
+function ensureTrackedTimer() {
+  if (state.tracked && !trackedTimer) {
+    trackedTimer = setInterval(tickTracked, 1000);
+  } else if (!state.tracked && trackedTimer) {
+    clearInterval(trackedTimer);
+    trackedTimer = null;
+  }
 }
 
 function tickTracked() {
@@ -1462,6 +1576,12 @@ function syncChrome() {
   document.title = `${page.title} · Jimmy Transit Tracker`;
 
   if (!pageIsLoaded(page)) loadPage(page);
+  else maybeRefreshPage(page);
+
+  if (state.savedPage !== state.page) {
+    state.savedPage = state.page;
+    try { localStorage.setItem(PAGE_KEY, String(state.page)); } catch { /* ignore */ }
+  }
 
   const dots = document.querySelectorAll('.pdot');
   dots.forEach((dot, i) => {
@@ -1511,10 +1631,30 @@ function buildPager() {
 
 /* ---------------- boot ---------------- */
 
+function readSavedPage() {
+  try {
+    const saved = Number(localStorage.getItem(PAGE_KEY) || '0');
+    return Number.isInteger(saved) ? saved : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function restorePage(index) {
+  if (!Number.isInteger(index) || index <= 0 || index >= PAGES.length) return;
+  requestAnimationFrame(() => {
+    goToPage(index, false);
+    syncChrome();
+  });
+}
+
 function init() {
+  loadSnapshot();
+  const savedPage = readSavedPage();
   buildPager();
   syncChrome();
   render();
+  restorePage(savedPage);
 
   document.getElementById('refresh').addEventListener('click', () => refresh(true));
 
@@ -1531,7 +1671,7 @@ function init() {
   refresh();
   restoreAlert();
 
-  setInterval(tickTracked, 500);
+  ensureTrackedTimer();
 
   setInterval(() => {
     if (document.visibilityState === 'visible') refresh();
@@ -1553,7 +1693,7 @@ function init() {
     || location.hostname === '127.0.0.1';
 
   if ('serviceWorker' in navigator && secure) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
   }
 }
 
