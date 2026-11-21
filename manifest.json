@@ -1,7 +1,7 @@
 {
   "name": "Bus Times",
   "short_name": "Bus Times",
-  "description": "Live arrivals for Hong Kong minibus 25 & 49M and Citybus 25, 25A, 27 and 85.",
+  "description": "Live arrivals for Hong Kong minibus 25 & 49M, Citybus 25, 25A, 27 and 85, and KMB 108.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

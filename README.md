@@ -1,7 +1,7 @@
 # Bus Times
 
 A one-screen-per-page iPhone web app showing the next arrivals for the
-buses around Braemar Hill, in two swipeable pages.
+buses around Braemar Hill, in three swipeable pages.
 
 **Minibuses** — green minibus **25** and **49M**:
 
@@ -21,10 +21,18 @@ buses around Braemar Hill, in two swipeable pages.
 | 25A | 1 — Exhibition Centre Station · 23 — Flora Garden, Cloud View Road |
 | 25 | 1 — Central Ferry, Man Kwong Street · 31 — Flora Garden, Cloud View Road |
 
+**KMB** — route **108** (outbound, Kai Yip → Braemar Hill):
+
+| Route | Stops |
+|-------|-------|
+| 108 | 4 — Skyline Tower · 17 — Cross Harbour Tunnel BBI · 22 — St. Paul's Hospital |
+
 Live data comes from the Transport Department's **eTA GMB** API
-(`data.etagmb.gov.hk`) and the **Citybus** batch Stop-ETA API
-(`rt.data.gov.hk/v1/transport/batch/stop-eta/CTB/{stop_id}`). No API key,
-no account, no backend.
+(`data.etagmb.gov.hk`), the **Citybus** batch Stop-ETA API
+(`rt.data.gov.hk/v1/transport/batch/stop-eta/CTB/{stop_id}`) and the
+**KMB** ETA API
+(`data.etabus.gov.hk/v1/transport/kmb/eta/{stop_id}/{route}/{service_type}`).
+No API key, no account, no backend.
 
 Citybus's per-route ETA endpoint (`/v2/transport/citybus/eta/CTB/{route}/{stop}`)
 currently returns an empty list for every route, so the app uses the batch
@@ -35,14 +43,14 @@ poles serve more than one direction.
 
 ## What it does
 
-- Two pages — **Minibuses** and **Citybus** — swipe left/right to switch,
-  or tap the dots next to the status line. Each page keeps its own scroll
-  position.
+- Three pages — **Minibuses**, **Citybus** and **KMB** — swipe left/right
+  to switch, or tap the dots next to the status line. Each page keeps its
+  own scroll position.
 - Shows the next 3 buses for each saved stop, in minutes.
-- Citybus arrivals are colour-coded: green/grey entries are **live**
-  (GPS-based) predictions, and blue entries are **scheduled** times taken
-  from Citybus's timetable. Live data is shown wherever Citybus publishes
-  it; scheduled times fill the remaining slots.
+- Citybus and KMB arrivals are colour-coded: green/grey entries are **live**
+  (GPS-based) predictions, and blue entries are **scheduled** times. Live
+  data is shown wherever the operator publishes it; scheduled times fill the
+  remaining slots.
 - Refreshes every 30 seconds while the screen is open.
 - Uses your location to highlight the nearest stop *on the page you are
   looking at* in a strip at the top, and to show the straight-line distance
@@ -83,11 +91,14 @@ immediately; no build command, no output directory (it is a static site).
 
 ## Changing the saved stops
 
-The stops are defined in `bake.py`, in two lists:
+The stops are defined in `bake.py`, in three lists:
 
 - `MINIBUS_ROUTES` — `bookmarks` are minibus stop sequence numbers.
 - `CITYBUS_ROUTES` — `direction` is `outbound` or `inbound`, and
   `bookmarks` are stop sequence numbers in that direction.
+- `KMB_ROUTES` — `bound` is `outbound` or `inbound`, `service_type` is the
+  KMB variant (1 for the normal 108), and `bookmarks` are stop sequence
+  numbers in that direction.
 
 Change the numbers, then rebuild the static data:
 
@@ -133,6 +144,9 @@ arriving soonest and labels it with that group's destination.
   matches the “Scheduled” label in the official Citybus app. On the rare
   occasion a live prediction lands exactly on `:00`, it will be shown as
   scheduled.
+- KMB labels scheduled rows explicitly in `rmk_en` as `Scheduled Bus`; the
+  app shows those in the same blue style. Only the normal outbound 108
+  (service type 1) is tracked.
 - The distance on each card is the straight-line distance (“as the crow
   flies”) from your last known position, shown only when location access is
   allowed. It is not a routed walking path and needs no extra map service.
