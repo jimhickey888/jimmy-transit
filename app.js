@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.4.0';
-const APP_BUILD = '22 Nov 2026, 03:11 HKT';
+const APP_VERSION = '2.4.1';
+const APP_BUILD = '22 Nov 2026, 03:14 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -73,6 +73,7 @@ const state = {
   pageUpdated: new Map(), // page id -> last successful page fetch
   fromCache: false,    // painting the snapshot while the first refresh runs
   savedPage: -1,
+  calls: new Map(),    // API label -> { count, last }
   pills: new Map(),    // render-scoped id -> tapped arrival
   pillSeq: 0,
   beeps: {},
@@ -164,7 +165,25 @@ function distanceM(a, b) {
 
 /* ---------------- data ---------------- */
 
+const API_LABELS = {
+  'rt.data.gov.hk': 'Citybus',
+  'data.etabus.gov.hk': 'KMB',
+  'data.etagmb.gov.hk': 'Minibuses',
+  'api.tfl.gov.uk': 'London (TfL)',
+};
+const PUSH_LABEL = 'Push alerts';
+const API_ROWS = ['Citybus', 'KMB', 'Minibuses', 'London (TfL)', PUSH_LABEL];
+
+/* Per-session request counters for the Info page. */
+function noteApiCall(label) {
+  const entry = state.calls.get(label) || { count: 0, last: null };
+  entry.count += 1;
+  entry.last = Date.now();
+  state.calls.set(label, entry);
+}
+
 async function getJson(url, signal) {
+  try { noteApiCall(API_LABELS[new URL(url).host] || 'Other'); } catch { /* ignore */ }
   const res = await fetch(url, { cache: 'no-store', signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
@@ -861,6 +880,36 @@ function segmentHtml(page) {
   return html;
 }
 
+function callsHtml() {
+  const rows = API_ROWS.map((label) => {
+    const entry = state.calls.get(label);
+    const count = entry ? entry.count : 0;
+    const last = entry && entry.last ? fmtTime(new Date(entry.last)) : '—';
+    return `<div class="call-row"><span>${esc(label)}</span>`
+      + `<strong>${count}</strong>`
+      + `<span class="call-time">${esc(last)}</span></div>`;
+  }).join('');
+
+  const total = API_ROWS.reduce((sum, label) => {
+    const entry = state.calls.get(label);
+    return sum + (entry ? entry.count : 0);
+  }, 0);
+
+  return `
+    <section class="info-block">
+      <h2>API calls since launch</h2>
+      <div class="info-card calls">
+        <div class="call-row call-head"><span>API</span><span>Calls</span><span>Last call</span></div>
+        ${rows}
+      </div>
+      <p class="info-note">
+        Counts reset when the app is closed or reloaded. Only real network
+        requests are counted, so cache hits are free. Times are device local.
+        Total this session: <strong>${total}</strong>.
+      </p>
+    </section>`;
+}
+
 function infoHtml() {
   const endpoints = [
     ['Minibuses (GMB)', 'https://data.etagmb.gov.hk/eta/route-stop/{route_id}/{route_seq}/{stop_seq}'],
@@ -877,6 +926,7 @@ function infoHtml() {
         <div class="meta-row"><span>Built</span><strong>${esc(APP_BUILD)}</strong></div>
       </div>
     </section>
+    ${callsHtml()}
     <section class="info-block">
       <h2>Data endpoints</h2>
       ${endpoints.map(([label, url]) => `
@@ -1493,6 +1543,7 @@ async function scheduleAlert(sub) {
     for (const step of plan) {
       const id = `${group}-${step.minutes}`;
       ids.push(id);
+      noteApiCall(PUSH_LABEL);
       const res = await fetch(`${PUSH_ENDPOINT}/alert`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1534,6 +1585,7 @@ function cancelAlert(ids) {
   if (!pushConfigured() || !ids) return;
   const list = Array.isArray(ids) ? ids : [ids];
   for (const id of list) {
+    noteApiCall(PUSH_LABEL);
     fetch(`${PUSH_ENDPOINT}/alert?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
       .catch(() => {});
   }
@@ -1587,6 +1639,8 @@ function syncChrome() {
   if (state.savedPage !== state.page) {
     state.savedPage = state.page;
     try { localStorage.setItem(PAGE_KEY, String(state.page)); } catch { /* ignore */ }
+    /* Refresh the counters each time the Info page is opened. */
+    if (page.api === 'info') renderPage(page);
   }
 
   const dots = document.querySelectorAll('.pdot');

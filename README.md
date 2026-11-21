@@ -60,7 +60,10 @@ Court”, not “Hangking”).
   **2A**, **307P**, **678**, **77**, **81**, **8H**, **99**, **N122** and
   **N8X**, with departure and arrival groups at those two stops.
 
-**Info** — lists the live-data endpoints, app version and build date/time.
+**Info** — lists the live-data endpoints, app version and build date/time,
+and a per-session count of API calls (Citybus, KMB, Minibuses, TfL and the
+push worker) with the time of the last call. Counts reset on relaunch and
+only real network requests are counted, so cache hits are free.
 
 Live data comes from the Transport Department's **eTA GMB** API
 (`data.etagmb.gov.hk`), the **Citybus** batch Stop-ETA API
