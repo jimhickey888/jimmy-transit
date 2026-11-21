@@ -332,6 +332,17 @@ h1 {
   line-height: 1.25;
 }
 
+.stop-head { min-width: 0; }
+
+.stop-dest {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .stop-seq {
   flex: none;
   font-size: 12px;

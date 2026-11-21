@@ -22,8 +22,16 @@ buses around Braemar Hill, in two swipeable pages.
 | 25 | 1 — Central Ferry, Man Kwong Street · 31 — Flora Garden, Cloud View Road |
 
 Live data comes from the Transport Department's **eTA GMB** API
-(`data.etagmb.gov.hk`) and the **Citybus** API (`rt.data.gov.hk`). No API
-key, no account, no backend.
+(`data.etagmb.gov.hk`) and the **Citybus** batch Stop-ETA API
+(`rt.data.gov.hk/v1/transport/batch/stop-eta/CTB/{stop_id}`). No API key,
+no account, no backend.
+
+Citybus's per-route ETA endpoint (`/v2/transport/citybus/eta/CTB/{route}/{stop}`)
+currently returns an empty list for every route, so the app uses the batch
+Stop-ETA endpoint instead: one request per physical stop returns every
+route's arrivals there. Each Citybus card is labelled with where the bus
+is going (`→ Braemar Hill`, `→ Central (Ferry Piers)`, …) because a few
+poles serve more than one direction.
 
 ## What it does
 
@@ -83,6 +91,14 @@ python3 bake.py
 ```
 
 The script rewrites `data.js` and prints what it saved for each route.
+It bakes each stop's ID, English name and coordinates, so the app makes no
+route/stop lookup calls at runtime.
+
+At runtime, Citybus rows are matched to a card by `route` and stop `seq`.
+The direction flag in the feed is not used for matching, because Citybus
+labels it inconsistently; the card instead shows the `dest` of the buses it
+is listing. When a pole serves two directions, the card keeps the group
+arriving soonest and labels it with that group's destination.
 
 ## Files
 
@@ -103,9 +119,11 @@ The script rewrites `data.js` and prints what it saved for each route.
   shows minutes to each stop; it does not draw buses on a map.
 - Outside service hours the feeds return empty lists and the cards show
   “No arrivals right now”.
-- Citybus stops are shown for the **outbound** direction only.
+- Citybus cards are built from the stop lists chosen in `bake.py` (all
+  outbound stop numbers). The destination on each card shows which way the
+  listed buses are actually travelling.
 - If every Citybus card is empty for a long stretch during service hours,
-  the Citybus feed itself is down; it usually recovers without a change
+  the Citybus feed itself may be down; it usually recovers without a change
   here. The minibus page is unaffected.
 - 49M also has a rarely-used “Po Luen Path” detour variant; this app shows
   the normal route only.
