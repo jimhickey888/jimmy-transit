@@ -25,7 +25,7 @@ function keyOf(page, route, stop) {
     return `gmb:${route.route_id}/${route.route_seq}/${stop.seq}`;
   }
   if (page.api === 'kmb') {
-    return `kmb:${route.route}/${route.service_type}/${stop.seq}`;
+    return `kmb:${route.route}/${route.service_type}/${route.direction}/${stop.seq}`;
   }
   return `ctb:${route.route}/${route.dirCode}/${stop.stop_id}`;
 }
@@ -134,16 +134,18 @@ async function fetchEta(page, route, stop) {
   if (page.api === 'kmb') {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12000);
+    const dirCode = route.direction === 'inbound' ? 'I' : 'O';
     try {
       const body = await getJson(
         `${KMB_API}/eta/${stop.stop_id}/${route.route}/${route.service_type}`,
         controller.signal,
       );
       const rows = Array.isArray(body.data) ? body.data : [];
-      /* Match the stop sequence and service type so other directions or
-         short-workings at the same pole do not leak into the card. */
+      /* Match the stop sequence, direction and service type so other
+         directions or short-workings at the same pole do not leak in. */
       const matched = rows
         .filter((row) => row.route === route.route
+          && row.dir === dirCode
           && Number(row.service_type) === Number(route.service_type)
           && Number(row.seq) === Number(stop.seq)
           && row.eta)
@@ -476,7 +478,8 @@ function syncChrome() {
   if (!page) return;
 
   document.getElementById('title').textContent = page.title;
-  document.getElementById('sub').textContent = page.routes.map((r) => r.code).join(' · ');
+  const codes = [...new Set(page.routes.map((r) => r.code))];
+  document.getElementById('sub').textContent = codes.join(' · ');
   document.title = `${page.title} · Bus Times`;
 
   const dots = document.querySelectorAll('.pdot');

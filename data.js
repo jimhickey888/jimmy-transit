@@ -1223,16 +1223,6 @@ const PAGES = [
             "seq": 4,
             "stop_id": "32A2D05A195364DC",
             "name": "SKYLINE TOWER"
-          },
-          {
-            "seq": 17,
-            "stop_id": "06C9926B2E2B304F",
-            "name": "CROSS HARBOUR TUNNEL BBI"
-          },
-          {
-            "seq": 22,
-            "stop_id": "BEFD9F22518EC452",
-            "name": "ST. PAUL'S HOSPITAL"
           }
         ],
         "stops": [
@@ -1459,6 +1449,252 @@ const PAGES = [
             "name": "BRAEMAR HILL BUS TERMINUS",
             "lat": 22.283365,
             "lon": 114.198923
+          }
+        ]
+      },
+      {
+        "code": "108",
+        "route": "108",
+        "service_type": 1,
+        "direction": "inbound",
+        "orig": "BRAEMAR HILL",
+        "dest": "KAI YIP",
+        "bookmarks": [
+          {
+            "seq": 17,
+            "stop_id": "AA97FFC49AE957A5",
+            "name": "VALLEY ROAD HUNG HOM"
+          },
+          {
+            "seq": 22,
+            "stop_id": "6D6EE27729F3C486",
+            "name": "THE FAMILY PLANNING ASSOCIATION OF HK"
+          }
+        ],
+        "stops": [
+          {
+            "seq": 1,
+            "stop_id": "712502C1013BBC1C",
+            "name": "BRAEMAR HILL BUS TERMINUS",
+            "lat": 22.283365,
+            "lon": 114.198923
+          },
+          {
+            "seq": 2,
+            "stop_id": "C24D58A7C3133FDC",
+            "name": "OXFORD COURT(HKSYU)",
+            "lat": 22.285208,
+            "lon": 114.199456
+          },
+          {
+            "seq": 3,
+            "stop_id": "B1D2A289C9710B3E",
+            "name": "CCC KWEI WAH SHAN COLLEGE",
+            "lat": 22.287054,
+            "lon": 114.199035
+          },
+          {
+            "seq": 4,
+            "stop_id": "632639E4C5ED8F2E",
+            "name": "FLORA GARDEN",
+            "lat": 22.287199,
+            "lon": 114.197405
+          },
+          {
+            "seq": 5,
+            "stop_id": "B8287EA10FCA0837",
+            "name": "MAIDEN COURT",
+            "lat": 22.2862,
+            "lon": 114.196747
+          },
+          {
+            "seq": 6,
+            "stop_id": "F7756ADD267DFE71",
+            "name": "EVELYN TOWERS",
+            "lat": 22.284742,
+            "lon": 114.195932
+          },
+          {
+            "seq": 7,
+            "stop_id": "45B5CCA0A38FC3D5",
+            "name": "NORTH POINT GOVT PRIMARY SCHOOL (CLOUD VIEW RD)",
+            "lat": 22.283215,
+            "lon": 114.194977
+          },
+          {
+            "seq": 8,
+            "stop_id": "C1C2FA697C82D436",
+            "name": "YEE KING ROAD",
+            "lat": 22.281431,
+            "lon": 114.193702
+          },
+          {
+            "seq": 9,
+            "stop_id": "A5AE9E9EC7923C42",
+            "name": "LAI KIT LAU LAI TAK TSUEN",
+            "lat": 22.27885,
+            "lon": 114.193699
+          },
+          {
+            "seq": 10,
+            "stop_id": "8F3036848FC1BBEA",
+            "name": "TSUEN WING LAU LAI TAK TSUEN",
+            "lat": 22.277758,
+            "lon": 114.194491
+          },
+          {
+            "seq": 11,
+            "stop_id": "F2DC5E6E97C7012A",
+            "name": "LI KWAN AVENUE",
+            "lat": 22.276749,
+            "lon": 114.194221
+          },
+          {
+            "seq": 12,
+            "stop_id": "E0EE7D134C3C963D",
+            "name": "FONTANA GARDENS",
+            "lat": 22.278129,
+            "lon": 114.190444
+          },
+          {
+            "seq": 13,
+            "stop_id": "455C67DEE3D3E649",
+            "name": "MORETON TERRACE",
+            "lat": 22.279612,
+            "lon": 114.188873
+          },
+          {
+            "seq": 14,
+            "stop_id": "5B3C373DE4DCAE6F",
+            "name": "YEE WO STREET",
+            "lat": 22.279745,
+            "lon": 114.185534
+          },
+          {
+            "seq": 15,
+            "stop_id": "19F3CE793CCBE505",
+            "name": "CANAL ROAD EAST",
+            "lat": 22.278393,
+            "lon": 114.181326
+          },
+          {
+            "seq": 16,
+            "stop_id": "11B2034DDF30617A",
+            "name": "CROSS HARBOUR TUNNEL BBI",
+            "lat": 22.302459,
+            "lon": 114.179851
+          },
+          {
+            "seq": 17,
+            "stop_id": "AA97FFC49AE957A5",
+            "name": "VALLEY ROAD HUNG HOM",
+            "lat": 22.309361,
+            "lon": 114.183871
+          },
+          {
+            "seq": 18,
+            "stop_id": "F6A446C66F7F805E",
+            "name": "PAK KUNG STREET HUNG HOM",
+            "lat": 22.312193,
+            "lon": 114.186074
+          },
+          {
+            "seq": 19,
+            "stop_id": "4850531F57582BD9",
+            "name": "LOK SHAN ROAD TO KWA WAN",
+            "lat": 22.317025,
+            "lon": 114.187465
+          },
+          {
+            "seq": 20,
+            "stop_id": "4C52780594F2D674",
+            "name": "TIN KWONG ROAD TO KWA WAN",
+            "lat": 22.319632,
+            "lon": 114.187459
+          },
+          {
+            "seq": 21,
+            "stop_id": "AA62C03711F778F2",
+            "name": "GERANIUM HOUSE",
+            "lat": 22.322517,
+            "lon": 114.187516
+          },
+          {
+            "seq": 22,
+            "stop_id": "6D6EE27729F3C486",
+            "name": "THE FAMILY PLANNING ASSOCIATION OF HK",
+            "lat": 22.323904,
+            "lon": 114.188214
+          },
+          {
+            "seq": 23,
+            "stop_id": "47B6BE5FC95C2042",
+            "name": "ARGYLE STREET PLAYGROUND",
+            "lat": 22.326329,
+            "lon": 114.189403
+          },
+          {
+            "seq": 24,
+            "stop_id": "BB172B3A5DAC85A4",
+            "name": "KOWLOON CITY BBI",
+            "lat": 22.328624,
+            "lon": 114.191977
+          },
+          {
+            "seq": 25,
+            "stop_id": "D7A05B5BAF07A89B",
+            "name": "THE LATITUDE, SAN PO KONG",
+            "lat": 22.33296,
+            "lon": 114.196532
+          },
+          {
+            "seq": 26,
+            "stop_id": "3D717F0365D5505B",
+            "name": "KING TAI STREET",
+            "lat": 22.334279,
+            "lon": 114.199287
+          },
+          {
+            "seq": 27,
+            "stop_id": "29759ECB92E1A91B",
+            "name": "TRADE AND INDUSTRY TOWER, INLAND REVENUE CENTRE",
+            "lat": 22.33284,
+            "lon": 114.19931
+          },
+          {
+            "seq": 28,
+            "stop_id": "C44684E01A99DE4F",
+            "name": "KOWLOON EAST REGIONAL POLICE HEADQUARTERS",
+            "lat": 22.334507,
+            "lon": 114.201857
+          },
+          {
+            "seq": 29,
+            "stop_id": "B48B8F12CD929F0F",
+            "name": "KAI TAK (KAI CHING ESTATE)",
+            "lat": 22.332416,
+            "lon": 114.203904
+          },
+          {
+            "seq": 30,
+            "stop_id": "72999453ECAC4693",
+            "name": "SHING CHI COURT, BLOCK 8 RICHLAND GARDENS",
+            "lat": 22.331389,
+            "lon": 114.205832
+          },
+          {
+            "seq": 31,
+            "stop_id": "09B6F28D05DA00F4",
+            "name": "WANG CHI COURT",
+            "lat": 22.330139,
+            "lon": 114.207962
+          },
+          {
+            "seq": 32,
+            "stop_id": "0718DE53C1C84496",
+            "name": "KAI YIP BUS TERMINUS",
+            "lat": 22.328668,
+            "lon": 114.208557
           }
         ]
       }

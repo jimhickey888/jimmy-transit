@@ -58,7 +58,9 @@ DIR_CODES = {"outbound": "O", "inbound": "I"}
 # direction. 108's service type 1 runs Kai Yip <-> Braemar Hill.
 KMB_ROUTES = [
     {"code": "108", "bound": "outbound", "service_type": 1,
-     "bookmarks": [4, 17, 22]},
+     "bookmarks": [4]},
+    {"code": "108", "bound": "inbound", "service_type": 1,
+     "bookmarks": [17, 22]},
 ]
 
 
@@ -206,7 +208,7 @@ def main():
     kmb_collected = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         for route, info in pool.map(kmb_route, KMB_ROUTES):
-            kmb_info[route["code"]] = info
+            kmb_info[(route["code"], route["bound"], route["service_type"])] = info
         for route, stops in pool.map(kmb_route_stops, KMB_ROUTES):
             kmb_collected.append((route, stops))
 
@@ -218,7 +220,7 @@ def main():
 
     kmb = []
     for route, stops in kmb_collected:
-        info = kmb_info[route["code"]]
+        info = kmb_info[(route["code"], route["bound"], route["service_type"])]
         kmb.append({
             "code": route["code"],
             "route": route["code"],

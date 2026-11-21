@@ -21,11 +21,12 @@ buses around Braemar Hill, in three swipeable pages.
 | 25A | 1 — Exhibition Centre Station · 23 — Flora Garden, Cloud View Road |
 | 25 | 1 — Central Ferry, Man Kwong Street · 31 — Flora Garden, Cloud View Road |
 
-**KMB** — route **108** (outbound, Kai Yip → Braemar Hill):
+**KMB** — route **108**, with one outbound and two inbound stops:
 
-| Route | Stops |
-|-------|-------|
-| 108 | 4 — Skyline Tower · 17 — Cross Harbour Tunnel BBI · 22 — St. Paul's Hospital |
+| Direction | Stops |
+|-----------|-------|
+| Outbound (Kai Yip → Braemar Hill) | 4 — Skyline Tower |
+| Inbound (Braemar Hill → Kai Yip) | 17 — Valley Road Hung Hom · 22 — The Family Planning Association of HK |
 
 Live data comes from the Transport Department's **eTA GMB** API
 (`data.etagmb.gov.hk`), the **Citybus** batch Stop-ETA API
@@ -145,8 +146,8 @@ arriving soonest and labels it with that group's destination.
   occasion a live prediction lands exactly on `:00`, it will be shown as
   scheduled.
 - KMB labels scheduled rows explicitly in `rmk_en` as `Scheduled Bus`; the
-  app shows those in the same blue style. Only the normal outbound 108
-  (service type 1) is tracked.
+  app shows those in the same blue style. Only the normal 108 (service
+  type 1) is tracked, in the directions shown above.
 - The distance on each card is the straight-line distance (“as the crow
   flies”) from your last known position, shown only when location access is
   allowed. It is not a routed walking path and needs no extra map service.
