@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.1.0';
-const APP_BUILD = '22 Nov 2026, 02:17 HKT';
+const APP_VERSION = '2.1.1';
+const APP_BUILD = '22 Nov 2026, 02:28 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -1330,27 +1330,33 @@ async function scheduleAlert(sub) {
   const body = alertBody(t);
   const ids = [];
 
-  for (const step of plan) {
-    const id = `${group}-${step.minutes}`;
-    ids.push(id);
-    const res = await fetch(`${PUSH_ENDPOINT}/alert`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        subscription,
-        alert: {
-          id,
-          fireAt: step.fireAt,
-          leadMinutes: step.minutes,
-          title: step.minutes === 0
-            ? `${t.routeCode} due now`
-            : `${t.routeCode} in ${step.minutes} min`,
-          body,
-          tag: id,
-        },
-      }),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  try {
+    for (const step of plan) {
+      const id = `${group}-${step.minutes}`;
+      ids.push(id);
+      const res = await fetch(`${PUSH_ENDPOINT}/alert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subscription,
+          alert: {
+            id,
+            fireAt: step.fireAt,
+            leadMinutes: step.minutes,
+            title: step.minutes === 0
+              ? `${t.routeCode} due now`
+              : `${t.routeCode} in ${step.minutes} min`,
+            body,
+            tag: id,
+          },
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    }
+  } catch (error) {
+    /* Do not leave a half-armed group behind. */
+    cancelAlert(ids);
+    throw error;
   }
 
   /* Drop milestones that no longer exist after the prediction moved. */
