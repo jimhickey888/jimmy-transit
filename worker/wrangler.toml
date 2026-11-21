@@ -1,0 +1,18 @@
+# Deploy with: npx wrangler deploy
+# Free plan supports cron triggers; the interval below needs 1-minute crons.
+
+name = "jimmy-transit-push"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+# Create the namespace first: npx wrangler kv namespace create ALERTS
+# then replace the id below with the one it prints.
+[[kv_namespaces]]
+binding = "ALERTS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+VAPID_SUBJECT = "mailto:jimhickey888@users.noreply.github.com"

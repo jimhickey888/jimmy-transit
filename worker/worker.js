@@ -1,0 +1,347 @@
+/* Jimmy Transit push worker.
+ *
+ * Stores a Web Push subscription plus one scheduled alert per tracked bus,
+ * and a cron trigger checks every minute and sends the notification.
+ *
+ * Deploy with wrangler (see README.md) or paste this file into the
+ * Cloudflare dashboard. Required configuration:
+ *   KV binding   ALERTS
+ *   Secret       VAPID_PRIVATE_JWK   (EC P-256 private key as a JWK)
+ *   Variable     VAPID_PUBLIC_KEY    (uncompressed P-256 point, base64url)
+ *   Variable     VAPID_SUBJECT       (mailto:you@example.com or https URL)
+ *   Cron         * * * * *
+ */
+
+const ALLOWED_ORIGINS = [
+  'https://jimhickey888.github.io',
+  'http://localhost:8000',
+  'http://127.0.0.1:8000',
+];
+
+const MAX_LEAD_MIN = 30;
+const MAX_ALERTS = 20;
+const utf8 = new TextEncoder();
+
+/* ---------------- encoding helpers ---------------- */
+
+export function b64urlEncode(bytes) {
+  let binary = '';
+  for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+export function b64urlDecode(value) {
+  const padded = String(value).replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(padded + '='.repeat((4 - (padded.length % 4)) % 4));
+  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
+}
+
+function concat(...arrays) {
+  const total = arrays.reduce((n, a) => n + a.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const array of arrays) {
+    out.set(array, offset);
+    offset += array.length;
+  }
+  return out;
+}
+
+async function hkdf(salt, ikm, info, length) {
+  const key = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'HKDF', hash: 'SHA-256', salt, info },
+    key,
+    length * 8,
+  );
+  return new Uint8Array(bits);
+}
+
+/* ---------------- RFC 8291 payload encryption ---------------- */
+
+export async function encryptPayload(subscription, payload) {
+  const uaPublic = b64urlDecode(subscription.keys.p256dh);
+  const authSecret = b64urlDecode(subscription.keys.auth);
+
+  const ephemeral = await crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256' },
+    true,
+    ['deriveBits'],
+  );
+  const asPublic = new Uint8Array(await crypto.subtle.exportKey('raw', ephemeral.publicKey));
+
+  const uaKey = await crypto.subtle.importKey(
+    'raw',
+    uaPublic,
+    { name: 'ECDH', namedCurve: 'P-256' },
+    false,
+    [],
+  );
+  const shared = new Uint8Array(await crypto.subtle.deriveBits(
+    { name: 'ECDH', public: uaKey },
+    ephemeral.privateKey,
+    256,
+  ));
+
+  const context = concat(utf8.encode('WebPush: info\0'), uaPublic, asPublic);
+  const ikm = await hkdf(authSecret, shared, context, 32);
+
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const cek = await hkdf(salt, ikm, utf8.encode('Content-Encoding: aes128gcm\0'), 16);
+  const nonce = await hkdf(salt, ikm, utf8.encode('Content-Encoding: nonce\0'), 12);
+
+  const plaintext = concat(utf8.encode(JSON.stringify(payload)), new Uint8Array([2]));
+  const aesKey = await crypto.subtle.importKey('raw', cek, 'AES-GCM', false, ['encrypt']);
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: nonce, tagLength: 128 },
+    aesKey,
+    plaintext,
+  ));
+
+  const recordSize = new Uint8Array([0x00, 0x00, 0x10, 0x00]); // 4096
+  const header = concat(salt, recordSize, new Uint8Array([asPublic.length]), asPublic);
+  return concat(header, ciphertext);
+}
+
+/* ---------------- RFC 8292 VAPID ---------------- */
+
+export async function vapidHeaders(endpoint, privateJwk, publicKey, subject) {
+  const header = { typ: 'JWT', alg: 'ES256' };
+  const claims = {
+    aud: new URL(endpoint).origin,
+    exp: Math.floor(Date.now() / 1000) + 12 * 60 * 60,
+    sub: subject,
+  };
+  const signingInput = `${b64urlEncode(utf8.encode(JSON.stringify(header)))}.`
+    + b64urlEncode(utf8.encode(JSON.stringify(claims)));
+
+  const key = await crypto.subtle.importKey(
+    'jwk',
+    privateJwk,
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    false,
+    ['sign'],
+  );
+  const signature = new Uint8Array(await crypto.subtle.sign(
+    { name: 'ECDSA', hash: 'SHA-256' },
+    key,
+    utf8.encode(signingInput),
+  ));
+
+  return {
+    Authorization: `vapid t=${signingInput}.${b64urlEncode(signature)}, k=${publicKey}`,
+  };
+}
+
+export async function sendPush(subscription, payload, vapid) {
+  const body = await encryptPayload(subscription, payload);
+  const headers = {
+    ...(await vapidHeaders(subscription.endpoint, vapid.privateJwk, vapid.publicKey, vapid.subject)),
+    'Content-Encoding': 'aes128gcm',
+    'Content-Type': 'application/octet-stream',
+    TTL: '300',
+    Urgency: 'high',
+  };
+  const response = await fetch(subscription.endpoint, { method: 'POST', headers, body });
+  return { ok: response.ok, status: response.status };
+}
+
+function vapidConfig(env) {
+  if (!env.VAPID_PRIVATE_JWK || !env.VAPID_PUBLIC_KEY || !env.VAPID_SUBJECT) {
+    throw new Error('VAPID_PRIVATE_JWK, VAPID_PUBLIC_KEY and VAPID_SUBJECT are required');
+  }
+  return {
+    privateJwk: JSON.parse(env.VAPID_PRIVATE_JWK),
+    publicKey: env.VAPID_PUBLIC_KEY,
+    subject: env.VAPID_SUBJECT,
+  };
+}
+
+/* ---------------- HTTP helpers ---------------- */
+
+function cors(origin) {
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400',
+    Vary: 'Origin',
+  };
+}
+
+function json(body, status, origin) {
+  return new Response(JSON.stringify(body), {
+    status: status || 200,
+    headers: { 'Content-Type': 'application/json', ...cors(origin) },
+  });
+}
+
+async function subIdFor(endpoint) {
+  const digest = await crypto.subtle.digest('SHA-256', utf8.encode(endpoint));
+  return [...new Uint8Array(digest)]
+    .slice(0, 12)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function validAlert(alert) {
+  return alert
+    && typeof alert.id === 'string'
+    && alert.id.length >= 6
+    && alert.id.length <= 80
+    && Number.isFinite(Number(alert.fireAt));
+}
+
+function validSubscription(subscription) {
+  return subscription
+    && typeof subscription.endpoint === 'string'
+    && subscription.endpoint.startsWith('https://')
+    && subscription.keys
+    && typeof subscription.keys.p256dh === 'string'
+    && typeof subscription.keys.auth === 'string';
+}
+
+async function storeAlert(env, subscription, alert) {
+  const endpoint = subscription.endpoint;
+  const keys = { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth };
+  const subId = await subIdFor(endpoint);
+
+  await env.ALERTS.put(
+    `sub:${subId}`,
+    JSON.stringify({ endpoint, keys }),
+    { expirationTtl: 60 * 60 * 24 * 120 },
+  );
+
+  const now = Date.now();
+  const fireAt = Math.max(now + 15000, Math.min(Number(alert.fireAt), now + 24 * 60 * 60 * 1000));
+  const leadMinutes = Math.min(MAX_LEAD_MIN, Math.max(0, Number(alert.leadMinutes) || 5));
+  const record = {
+    subId,
+    fireAt,
+    leadMinutes,
+    title: String(alert.title || 'Bus arriving soon').slice(0, 80),
+    body: String(alert.body || '').slice(0, 160),
+    tag: String(alert.tag || `bus-${alert.id}`).slice(0, 80),
+    createdAt: now,
+    attempts: 0,
+  };
+
+  const ttl = Math.max(3600, Math.ceil((fireAt - now) / 1000) + 86400);
+  await env.ALERTS.put(`alert:${alert.id}`, JSON.stringify(record), { expirationTtl: ttl });
+  return { subId, fireAt };
+}
+
+/* ---------------- cron ---------------- */
+
+export async function sendDueAlerts(env) {
+  const now = Date.now();
+  const vapid = vapidConfig(env);
+  let sent = 0;
+  let failed = 0;
+  let cursor;
+
+  do {
+    const listed = await env.ALERTS.list({ prefix: 'alert:', cursor });
+    for (const key of listed.keys) {
+      const record = await env.ALERTS.get(key.name, 'json');
+      if (!record) continue;
+      if (record.fireAt > now) continue;
+
+      if (now - record.fireAt > 15 * 60 * 1000) {
+        await env.ALERTS.delete(key.name);
+        continue;
+      }
+
+      const subscription = await env.ALERTS.get(`sub:${record.subId}`, 'json');
+      if (!subscription) {
+        await env.ALERTS.delete(key.name);
+        continue;
+      }
+
+      const result = await sendPush(subscription, {
+        title: record.title,
+        body: record.body,
+        tag: record.tag,
+        url: './',
+      }, vapid);
+
+      if (result.ok) {
+        sent += 1;
+        await env.ALERTS.delete(key.name);
+      } else if (result.status === 404 || result.status === 410) {
+        failed += 1;
+        await env.ALERTS.delete(`sub:${record.subId}`);
+        await env.ALERTS.delete(key.name);
+      } else {
+        failed += 1;
+        record.attempts = (record.attempts || 0) + 1;
+        if (record.attempts >= 5) {
+          await env.ALERTS.delete(key.name);
+        } else {
+          await env.ALERTS.put(key.name, JSON.stringify(record), { expirationTtl: 3600 });
+        }
+      }
+    }
+    cursor = listed.list_complete ? null : listed.cursor;
+  } while (cursor);
+
+  return { sent, failed };
+}
+
+/* ---------------- worker ---------------- */
+
+export default {
+  async fetch(request, env) {
+    const origin = request.headers.get('Origin') || '';
+    const url = new URL(request.url);
+    const headers = cors(origin);
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers });
+    }
+
+    if (url.pathname === '/' || url.pathname === '/health') {
+      return json({ ok: true, service: 'jimmy-transit-push', now: Date.now() }, 200, origin);
+    }
+
+    if (url.pathname === '/alert' && request.method === 'POST') {
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ error: 'invalid json' }, 400, origin);
+      }
+
+      if (!validSubscription(body.subscription)) {
+        return json({ error: 'subscription must include endpoint, keys.p256dh, keys.auth' }, 400, origin);
+      }
+      if (!validAlert(body.alert)) {
+        return json({ error: 'alert.id and alert.fireAt are required' }, 400, origin);
+      }
+
+      const stored = await storeAlert(env, body.subscription, body.alert);
+      return json({ ok: true, ...stored }, 200, origin);
+    }
+
+    if (url.pathname === '/alert' && request.method === 'DELETE') {
+      const id = url.searchParams.get('id');
+      if (!id) return json({ error: 'id is required' }, 400, origin);
+      await env.ALERTS.delete(`alert:${id}`);
+      return json({ ok: true }, 200, origin);
+    }
+
+    if (url.pathname === '/alerts') {
+      const listed = await env.ALERTS.list({ prefix: 'alert:' });
+      return json({ count: listed.keys.length, alerts: MAX_ALERTS }, 200, origin);
+    }
+
+    return json({ error: 'not found' }, 404, origin);
+  },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(sendDueAlerts(env).catch((error) => {
+      console.error('sendDueAlerts failed', error);
+    }));
+  },
+};

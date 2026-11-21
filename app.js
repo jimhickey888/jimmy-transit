@@ -10,8 +10,17 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '1.9.0';
-const APP_BUILD = '22 Nov 2026, 00:35 HKT';
+const APP_VERSION = '2.0.0';
+const APP_BUILD = '22 Nov 2026, 01:05 HKT';
+
+/* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
+   paste its URL and VAPID public key here to turn on the alert chip. */
+const PUSH_ENDPOINT = '';
+const PUSH_VAPID_KEY = 'BCPXl_A_ZsChEqNNcVJgMpjKCvKXUlpFE1-TQlxoPgYxLOUDX09V49xnJ4U6DKK1BS80-upzWIAB3aOBNeyC2DM';
+const PUSH_LEAD_MIN = 5;
+
+const TRACK_KEY = 'jimmy.tracked.v1';
+const PREFS_KEY = 'jimmy.prefs.v1';
 
 PAGES.push({
   id: 'info',
@@ -24,6 +33,22 @@ const REFRESH_MS = 30000;
 const MAX_ETAS = 3;
 const MOVE_THRESHOLD_M = 20;
 
+const loadPrefs = () => {
+  try {
+    return { screenOn: false, ...JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') };
+  } catch {
+    return { screenOn: false };
+  }
+};
+
+const loadTracked = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TRACK_KEY) || 'null');
+    if (saved && Number.isFinite(saved.targetMs) && saved.source) return saved;
+  } catch { /* ignore corrupt storage */ }
+  return null;
+};
+
 const state = {
   etas: new Map(),     // key -> { enabled, desc, list, at }
   segments: new Map(), // segment route code -> { from, to, at }
@@ -33,6 +58,13 @@ const state = {
   busy: false,
   lastPos: null,
   page: 0,
+  tracked: loadTracked(),
+  prefs: loadPrefs(),
+  pills: new Map(),    // render-scoped id -> tapped arrival
+  pillSeq: 0,
+  beeps: {},
+  wakeLock: null,
+  pushSub: null,
 };
 
 function keyOf(page, route, stop) {
@@ -69,7 +101,14 @@ function sortedEntries(list, now) {
     .map((entry) => {
       const m = minutesFrom(entry, now);
       if (m === null) return null;
-      return { m, scheduled: !!entry.scheduled, time: clockFrom(entry), vehicle: entry.vehicle || '' };
+      return {
+        m,
+        scheduled: !!entry.scheduled,
+        time: clockFrom(entry),
+        vehicle: entry.vehicle || '',
+        timestamp: entry.timestamp,
+        timeZone: entry.timeZone || '',
+      };
     })
     .filter(Boolean)
     .sort((a, b) => a.m - b.m);
@@ -452,33 +491,50 @@ function startGeolocation() {
 
 /* ---------------- rendering ---------------- */
 
-function etaPills(cached) {
+function etaPills(cached, ctx) {
   if (!cached) return '<span class="empty">Loading…</span>';
   if (!cached.enabled) return `<span class="empty">${esc(cached.desc || 'Not available')}</span>`;
 
   const entries = sortedEntries(cached.list, Date.now()).slice(0, MAX_ETAS);
   if (!entries.length) return '<span class="empty">No arrivals right now</span>';
 
-  return entries.map(({ m, scheduled, time, vehicle }, i) => {
+  return entries.map(({ m, scheduled, time, vehicle, timestamp, timeZone }, i) => {
     const classes = ['eta'];
     if (scheduled) classes.push('sched');
     else if (i === 0) classes.push('first');
     if (m <= 0 && !scheduled) classes.push('due');
 
+    const targetMs = Date.parse(timestamp);
+    const pill = ctx && Number.isFinite(targetMs)
+      ? { ...ctx, timestamp, timeZone, targetMs, scheduled, vehicle }
+      : null;
+    if (pill && isTrackedPill(pill)) classes.push('tracked');
+
     const cls = classes.join(' ');
-    const title = scheduled ? 'Scheduled time' : 'Live arrival';
     const timeHtml = time ? `<span class="eta-time">${esc(time)}</span>` : '';
     const vehicleHtml = vehicle ? `<span class="eta-vehicle">Bus ${esc(vehicle)}</span>` : '';
+    const body = m <= 0
+      ? `<span class="eta-main">Due</span>${timeHtml}${vehicleHtml}`
+      : `<span class="eta-main"><b>${m}</b><small>min</small></span>${timeHtml}${vehicleHtml}`;
 
-    if (m <= 0) {
-      return `<span class="${cls}" title="${title}"><span class="eta-main">Due</span>${timeHtml}${vehicleHtml}</span>`;
+    if (!pill) {
+      const title = scheduled ? 'Scheduled time' : 'Live arrival';
+      return `<span class="${cls}" title="${title}">${body}</span>`;
     }
-    return `<span class="${cls}" title="${title}"><span class="eta-main"><b>${m}</b><small>min</small></span>${timeHtml}${vehicleHtml}</span>`;
+
+    const id = registerPill(pill);
+    const status = m <= 0 ? 'due' : `${m} min`;
+    const label = `${ctx.routeCode} ${status} at ${ctx.stopName}`;
+    const action = isTrackedPill(pill) ? 'stop tracking' : 'track';
+    return `<button class="${cls}" type="button" data-pill="${id}"
+      aria-pressed="${classes.includes('tracked')}"
+      aria-label="${esc(`${label}, ${action}`)}"
+      title="${esc(`${scheduled ? 'Scheduled time' : 'Live arrival'} · tap to ${action}`)}">${body}</button>`;
   }).join('');
 }
 
-function etasHtml(page, route, stop) {
-  return etaPills(state.etas.get(keyOf(page, route, stop)));
+function etasHtml(page, route, stop, ctx) {
+  return etaPills(state.etas.get(keyOf(page, route, stop)), ctx);
 }
 
 function stopPoint(route, stop) {
@@ -672,7 +728,14 @@ function segmentHtml(page) {
               return `
                 <div class="route-row">
                   <span class="badge">${esc(route.code)}</span>
-                  <div class="etas">${etaPills(list)}</div>
+                  <div class="etas">${etaPills(list, {
+                    source: { type: 'segment', key: `${direction.id}:${route.code}`, field: block.field },
+                    routeCode: route.code,
+                    stopId: block.stop.stop_id,
+                    stopName: block.stop.name,
+                    direction: block.label,
+                    pageId: page.id,
+                  })}</div>
                 </div>`;
             }).join('')}
           </article>
@@ -707,6 +770,23 @@ function infoHtml() {
           <div class="endpoint-label">${esc(label)}</div>
           <code>${esc(url)}</code>
         </div>`).join('')}
+    </section>
+    <section class="info-block">
+      <h2>Countdown</h2>
+      <p class="info-note">
+        Tap any arrival to pin a countdown under the status line. It ticks every
+        second with the arrival time underneath, beeps one minute before and at
+        zero, and clears itself shortly after the bus is due. Tap the same
+        arrival again, or the ×, to stop tracking.
+      </p>
+    </section>
+    <section class="info-block">
+      <h2>Alerts</h2>
+      <p class="info-note">
+        With push set up, the alert chip on a tracked arrival sends one
+        notification 5 minutes before departure. iOS only allows web push for
+        apps added to the Home Screen, and delivery is best effort.
+      </p>
     </section>
     <p class="info-note">
       Live arrivals from the Transport Department, data.gov.hk and TfL.
@@ -756,11 +836,21 @@ function renderPage(page) {
           ${idHtml}
         </div>
         <article class="card${sharedClass}">
-          ${group.routes.map(({ route, stop }) => `
+          ${group.routes.map(({ route, stop }) => {
+            const ctx = {
+              source: { type: 'eta', key: keyOf(page, route, stop) },
+              routeCode: route.code,
+              stopId: group.stop_id,
+              stopName: group.name,
+              direction: group.label,
+              pageId: page.id,
+            };
+            return `
             <div class="route-row">
               <span class="badge">${esc(route.code)}</span>
-              <div class="etas">${etasHtml(page, route, stop)}</div>
-            </div>`).join('')}
+              <div class="etas">${etasHtml(page, route, stop, ctx)}</div>
+            </div>`;
+          }).join('')}
         </article>
       </section>`;
   }
@@ -790,7 +880,11 @@ function renderStatus() {
 }
 
 function render() {
+  state.pills.clear();
+  state.pillSeq = 0;
   for (const page of PAGES) renderPage(page);
+  syncTracked();
+  renderTracked();
   renderStatus();
 }
 
@@ -798,6 +892,423 @@ function setBusy(busy) {
   const button = document.getElementById('refresh');
   button.classList.toggle('spin', busy);
   button.disabled = busy;
+}
+
+/* ---------------- tracked arrival ---------------- */
+
+function registerPill(pill) {
+  const id = String(++state.pillSeq);
+  state.pills.set(id, pill);
+  return id;
+}
+
+function isTrackedPill(pill) {
+  const t = state.tracked;
+  if (!t || !pill) return false;
+  return t.routeCode === pill.routeCode
+    && t.stopId === pill.stopId
+    && Math.abs(t.targetMs - pill.targetMs) < 90000;
+}
+
+function saveTracked() {
+  try {
+    if (state.tracked) localStorage.setItem(TRACK_KEY, JSON.stringify(state.tracked));
+    else localStorage.removeItem(TRACK_KEY);
+  } catch { /* storage may be full or blocked */ }
+}
+
+function savePrefs() {
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(state.prefs)); } catch { /* ignore */ }
+}
+
+/* The tracked arrival lives in one of two caches: a normal stop group or a
+   Taikoo segment direction. */
+function trackedList(t) {
+  if (!t || !t.source) return null;
+  if (t.source.type === 'segment') {
+    const cache = state.segments.get(t.source.key);
+    const side = cache && cache[t.source.field];
+    return side ? side.list : null;
+  }
+  const cache = state.etas.get(t.source.key);
+  return cache ? cache.list : null;
+}
+
+/* Live predictions drift by a few seconds on every poll. Adopt the refreshed
+   time when it is clearly the same bus. */
+function syncTracked() {
+  const t = state.tracked;
+  if (!t) return;
+  const list = trackedList(t);
+  if (!Array.isArray(list) || !list.length) return;
+
+  let best = null;
+  for (const entry of list) {
+    const ms = Date.parse(entry && entry.timestamp);
+    if (!Number.isFinite(ms)) continue;
+    const diff = Math.abs(ms - t.targetMs);
+    if (diff <= 180000 && (!best || diff < best.diff)) best = { entry, ms, diff };
+  }
+  if (!best) return;
+
+  const shifted = Math.abs(best.ms - t.targetMs) > 1000;
+  t.targetMs = best.ms;
+  t.timestamp = best.entry.timestamp;
+  t.timeZone = best.entry.timeZone || t.timeZone;
+  t.scheduled = !!best.entry.scheduled;
+  t.vehicle = best.entry.vehicle || '';
+  saveTracked();
+
+  if (shifted && t.alert && t.alert.active) {
+    const fireAt = t.targetMs - t.alert.lead * 60000;
+    if (Math.abs(fireAt - t.alert.fireAt) > 60000) rescheduleAlert();
+  }
+}
+
+async function rescheduleAlert() {
+  const t = state.tracked;
+  if (!t || !t.alert || !t.alert.active) return;
+  try {
+    const sub = state.pushSub || await ensurePushSubscription();
+    await scheduleAlert(sub);
+  } catch { /* keep the old schedule */ }
+}
+
+function toggleTracked(pill) {
+  if (!pill) return;
+  if (isTrackedPill(pill)) {
+    clearTracked();
+    return;
+  }
+  state.tracked = {
+    routeCode: pill.routeCode,
+    stopId: pill.stopId,
+    stopName: pill.stopName,
+    direction: pill.direction || '',
+    pageId: pill.pageId || '',
+    source: pill.source,
+    timestamp: pill.timestamp,
+    timeZone: pill.timeZone || '',
+    targetMs: pill.targetMs,
+    scheduled: !!pill.scheduled,
+    vehicle: pill.vehicle || '',
+    screenOn: !!state.prefs.screenOn,
+    alert: null,
+  };
+  state.beeps = {};
+  unlockAudio();
+  saveTracked();
+  render();
+  applyWakeLock();
+  if (pushConfigured() && Notification.permission === 'granted') {
+    const left = state.tracked.targetMs - Date.now();
+    if (left > PUSH_LEAD_MIN * 60000 + 45000) {
+      ensurePushSubscription().then(scheduleAlert).catch(() => {});
+    }
+  }
+}
+
+function clearTracked() {
+  const t = state.tracked;
+  if (t && t.alert && t.alert.active) cancelAlert(t.alert.id);
+  state.tracked = null;
+  state.beeps = {};
+  saveTracked();
+  releaseWakeLock();
+  render();
+}
+
+function fmtCountdown(ms) {
+  if (ms <= 0) return 'Due';
+  const total = Math.ceil(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function alertChipLabel(t) {
+  if (t.alert && t.alert.active) return `Alert on · ${t.alert.lead} min`;
+  if (!pushSupported()) return 'Alerts need Home Screen';
+  if (typeof Notification !== 'undefined' && Notification.permission === 'denied') return 'Alerts blocked';
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') return `Alert ${PUSH_LEAD_MIN} min before`;
+  return `Alert ${PUSH_LEAD_MIN} min before`;
+}
+
+function trackedHtml(t) {
+  const chips = pushConfigured()
+    ? `<button class="chip" type="button" data-tracked="alert"
+         aria-pressed="${!!(t.alert && t.alert.active)}">${esc(alertChipLabel(t))}</button>`
+    : '';
+  return `
+    <div class="tracked-row">
+      <span class="badge">${esc(t.routeCode)}</span>
+      <span class="tracked-dir">${esc(t.direction || 'Tracked arrival')}</span>
+      <button class="tracked-close" type="button" data-tracked="clear" aria-label="Stop tracking">×</button>
+    </div>
+    <div class="tracked-row tracked-lower">
+      <span class="tracked-sub">${esc(t.stopName || '')}${t.stopId ? ` · Stop ${esc(t.stopId)}` : ''}</span>
+      <span class="tracked-clock">
+        <span class="tracked-count" id="trackedCount">--:--</span>
+        <span class="tracked-at" id="trackedAt">${esc(fmtClock(new Date(t.targetMs), t.timeZone))}</span>
+      </span>
+    </div>
+    <div class="tracked-row tracked-chips">
+      ${chips}
+      <button class="chip" type="button" data-tracked="screen"
+        aria-pressed="${!!t.screenOn}">Keep screen on</button>
+    </div>`;
+}
+
+function renderTracked() {
+  const bar = document.getElementById('tracked');
+  if (!bar) return;
+  const t = state.tracked;
+  if (!t) {
+    bar.hidden = true;
+    bar.innerHTML = '';
+    bar.classList.remove('urgent');
+    return;
+  }
+  bar.hidden = false;
+  bar.innerHTML = trackedHtml(t);
+  tickTracked();
+}
+
+function tickTracked() {
+  const t = state.tracked;
+  if (!t) return;
+  const count = document.getElementById('trackedCount');
+  if (!count) {
+    renderTracked();
+    return;
+  }
+  const left = t.targetMs - Date.now();
+  count.textContent = fmtCountdown(left);
+  count.classList.toggle('due', left <= 0);
+  document.getElementById('tracked').classList.toggle('urgent', left <= 60000);
+
+  if (t.beep) {
+    if (!state.beeps.min && left > 0 && left <= 60000) {
+      state.beeps.min = true;
+      beep(2);
+    }
+    if (!state.beeps.due && left <= 0) {
+      state.beeps.due = true;
+      beep(3);
+    }
+  }
+
+  if (left < -120000) clearTracked();
+}
+
+let flashTimer = null;
+function flashChip(text) {
+  const chip = document.querySelector('#tracked .chip[data-tracked="alert"]');
+  if (!chip) return;
+  chip.textContent = text;
+  chip.disabled = true;
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => {
+    chip.disabled = false;
+    renderTracked();
+  }, 2600);
+}
+
+/* ---------------- sound and screen ---------------- */
+
+let audioCtx = null;
+
+function unlockAudio() {
+  const Ctor = window.AudioContext || window.webkitAudioContext;
+  if (!Ctor) return;
+  try {
+    audioCtx = audioCtx || new Ctor();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch {
+    audioCtx = null;
+  }
+}
+
+function beep(count) {
+  if (!audioCtx) return;
+  try {
+    const now = audioCtx.currentTime;
+    for (let i = 0; i < count; i += 1) {
+      const at = now + i * 0.22;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.2, at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.16);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(at);
+      osc.stop(at + 0.18);
+    }
+  } catch { /* audio is best effort */ }
+}
+
+async function applyWakeLock() {
+  const want = state.tracked && state.tracked.screenOn;
+  if (!want) {
+    releaseWakeLock();
+    return;
+  }
+  if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+  try {
+    if (!state.wakeLock) {
+      state.wakeLock = await navigator.wakeLock.request('screen');
+      state.wakeLock.addEventListener('release', () => { state.wakeLock = null; });
+    }
+  } catch {
+    state.wakeLock = null;
+  }
+}
+
+function releaseWakeLock() {
+  if (state.wakeLock) {
+    try { state.wakeLock.release(); } catch { /* already gone */ }
+    state.wakeLock = null;
+  }
+}
+
+function toggleScreen() {
+  const t = state.tracked;
+  if (!t) return;
+  t.screenOn = !t.screenOn;
+  state.prefs.screenOn = t.screenOn;
+  savePrefs();
+  saveTracked();
+  applyWakeLock();
+  renderTracked();
+  if (t.screenOn && !('wakeLock' in navigator)) flashChip('Screen wake lock unsupported');
+}
+
+/* ---------------- push alerts (optional) ---------------- */
+
+function pushConfigured() {
+  return Boolean(PUSH_ENDPOINT && PUSH_VAPID_KEY);
+}
+
+function pushSupported() {
+  return 'Notification' in window && 'PushManager' in window && 'serviceWorker' in navigator;
+}
+
+function b64urlToBytes(value) {
+  const padded = value.replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(padded + '='.repeat((4 - (padded.length % 4)) % 4));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+async function ensurePushSubscription() {
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: b64urlToBytes(PUSH_VAPID_KEY),
+    });
+  }
+  state.pushSub = sub;
+  return sub;
+}
+
+async function armAlert() {
+  const t = state.tracked;
+  if (!t) return;
+  if (!pushConfigured()) {
+    flashChip('Push not set up yet');
+    return;
+  }
+  if (!pushSupported()) {
+    flashChip('Add to Home Screen first');
+    return;
+  }
+  if (Notification.permission === 'denied') {
+    flashChip('Notifications blocked');
+    return;
+  }
+
+  if (t.alert && t.alert.active) {
+    cancelAlert(t.alert.id);
+    t.alert = null;
+    saveTracked();
+    renderTracked();
+    return;
+  }
+
+  const left = t.targetMs - Date.now();
+  if (left <= PUSH_LEAD_MIN * 60000 + 45000) {
+    flashChip(`Under ${PUSH_LEAD_MIN} min away`);
+    return;
+  }
+
+  const permission = Notification.permission === 'granted'
+    ? 'granted'
+    : await Notification.requestPermission();
+  if (permission !== 'granted') {
+    flashChip('Alerts not allowed');
+    return;
+  }
+
+  try {
+    const sub = state.pushSub || await ensurePushSubscription();
+    await scheduleAlert(sub);
+  } catch {
+    flashChip('Could not set alert');
+  }
+}
+
+async function scheduleAlert(sub) {
+  const t = state.tracked;
+  if (!t) return;
+  const lead = PUSH_LEAD_MIN;
+  const fireAt = t.targetMs - lead * 60000;
+  const id = (t.alert && t.alert.id)
+    || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const body = {
+    subscription: sub && sub.toJSON ? sub.toJSON() : sub,
+    alert: {
+      id,
+      fireAt,
+      leadMinutes: lead,
+      title: `${t.routeCode} in ${lead} min`,
+      body: [t.stopName, t.stopId ? `Stop ${t.stopId}` : '', t.direction]
+        .filter(Boolean).join(' · '),
+      tag: `bus-${id}`,
+    },
+  };
+  const res = await fetch(`${PUSH_ENDPOINT}/alert`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  t.alert = { id, lead, fireAt, active: true };
+  saveTracked();
+  renderTracked();
+}
+
+function cancelAlert(id) {
+  if (!pushConfigured() || !id) return;
+  fetch(`${PUSH_ENDPOINT}/alert?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+    .catch(() => {});
+}
+
+/* Re-arm an existing alert when the app opens, so a stale fire time is
+   refreshed and the subscription is kept alive. */
+async function restoreAlert() {
+  const t = state.tracked;
+  if (!t || !t.alert || !t.alert.active) return;
+  if (!pushConfigured() || !pushSupported()) return;
+  if (Notification.permission !== 'granted') return;
+  try {
+    const sub = state.pushSub || await ensurePushSubscription();
+    await scheduleAlert(sub);
+  } catch { /* the old schedule in KV still stands */ }
 }
 
 /* ---------------- paging ---------------- */
@@ -865,6 +1376,13 @@ function buildPager() {
     });
   }, { passive: true });
 
+  pager.addEventListener('click', (event) => {
+    const pill = event.target.closest('.eta[data-pill]');
+    if (!pill) return;
+    const ctx = state.pills.get(pill.dataset.pill);
+    if (ctx) toggleTracked(ctx);
+  });
+
   window.addEventListener('resize', () => goToPage(state.page, false));
 }
 
@@ -877,15 +1395,32 @@ function init() {
 
   document.getElementById('refresh').addEventListener('click', () => refresh(true));
 
+  document.getElementById('tracked').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-tracked]');
+    if (!button) return;
+    const action = button.dataset.tracked;
+    if (action === 'clear') clearTracked();
+    else if (action === 'alert') armAlert();
+    else if (action === 'screen') toggleScreen();
+  });
+
   startGeolocation();
   refresh();
+  restoreAlert();
+
+  setInterval(tickTracked, 500);
 
   setInterval(() => {
     if (document.visibilityState === 'visible') refresh();
   }, REFRESH_MS);
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') refresh();
+    if (document.visibilityState === 'visible') {
+      tickTracked();
+      if (state.tracked) syncTracked();
+      applyWakeLock();
+      refresh();
+    }
   });
 
   window.addEventListener('online', () => refresh(true));

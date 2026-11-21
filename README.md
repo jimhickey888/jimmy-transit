@@ -62,7 +62,7 @@ Live data comes from the Transport Department's **eTA GMB** API
 (`data.etabus.gov.hk/v1/transport/kmb/eta/{stop_id}/{route}/{service_type}`)
 and **TfL**'s Line Arrivals API
 (`api.tfl.gov.uk/Line/{line}/Arrivals`). No API key, no account,
-no backend.
+and no backend for arrivals — an optional worker handles push alerts only.
 
 Citybus's per-route ETA endpoint (`/v2/transport/citybus/eta/CTB/{route}/{stop}`)
 currently returns an empty list for every route, so the app uses the batch
@@ -80,6 +80,15 @@ poles serve more than one direction.
 - Shows the next 3 buses for each saved stop, with a large countdown and
   the actual arrival clock time with seconds underneath (e.g. `12 min`
   above `21:48:30`).
+- **Tap any arrival** to pin it: a bar under the status line counts down
+  every second (`4:37` above `08:12:45`), beeps one minute before and when
+  the bus is due, and clears itself shortly afterwards. Tap the same
+  arrival or the `×` to stop. The choice survives refreshes and reloads.
+- The tracked bar has a **Keep screen on** chip (Wake Lock) so the display
+  stays awake while you watch a bus approach.
+- With the optional push worker deployed, the same bar has an **Alert
+  5 min before** chip: one Web Push notification per tracked bus, with the
+  route, stop and stop ID. See `worker/README.md`.
 - Where the operator publishes a vehicle ID (TfL), each arrival also shows
   the fleet bus ID.
 - Arrivals are grouped by **stop and direction**, not by route: each stop
@@ -101,6 +110,48 @@ poles serve more than one direction.
   stops always work.
 - Installable to the Home Screen; runs full-screen with its own icon.
 - Works in light and dark mode.
+
+## Tracking a bus
+
+Tap any arrival chip to pin it. A bar appears under the status line with the
+route, direction, stop name and stop ID, a countdown in `m:ss`, and the
+predicted arrival time with seconds. It keeps ticking while the app is open
+(and catches up instantly if iOS suspends the app), beeps at one minute and
+at zero, and clears itself two minutes after the bus is due.
+
+- Tap the same arrival, or the `×`, to stop tracking.
+- **Keep screen on** asks for a screen Wake Lock so the display does not dim
+  while you watch a bus.
+- The tracked arrival is remembered in `localStorage`, so a reload or a
+  30-second refresh keeps it.
+- Live predictions drift by a few seconds between polls; the app adopts the
+  refreshed time when it is clearly the same bus, and re-arms the alert if
+  the predicted time moves by more than a minute.
+
+## Push alerts (optional)
+
+iOS has no scheduled local notifications for web apps, and a service worker
+cannot wake itself, so a notification while the phone is locked needs a
+push sender. `worker/` is a small Cloudflare Worker (free plan) that stores
+one alert per tracked bus in KV and sends it five minutes before departure
+from a one-minute cron trigger.
+
+Setup is in **`worker/README.md`**; it takes a KV namespace, three
+variables/secrets and a cron entry, then the worker URL goes into
+`PUSH_ENDPOINT` in `app.js`. The matching VAPID public key is already in
+`app.js`; the private key stays in `worker/.vapid/` and in the Cloudflare
+secret, never in git.
+
+Limits to expect:
+
+- iOS only allows web push for apps added to the **Home Screen**, and only
+  after the user allows notifications from a tap.
+- Delivery is best effort: Low Power Mode, Focus and notification summaries
+  can delay or group it by a few minutes.
+- It sends **one** notification per tracked bus, five minutes before it is
+  due — not a repeating every-minute stream, which iOS would throttle.
+- If the bus is already under five minutes away, the chip declines to arm
+  the alert instead of sending it immediately.
 
 ## Run it locally
 
@@ -169,8 +220,9 @@ arriving soonest and labels it with that group's destination.
 | `data.js` | Generated route and stop data (names + coordinates) |
 | `bake.py` | Regenerates `data.js` from the two government APIs |
 | `manifest.json` | Home Screen install metadata |
-| `sw.js` | Caches the app shell so it opens instantly |
+| `sw.js` | Caches the app shell, and handles push notifications |
 | `icons/` | App icons |
+| `worker/` | Optional Cloudflare Worker that sends the 5-minute push alert |
 
 ## Notes and limits
 

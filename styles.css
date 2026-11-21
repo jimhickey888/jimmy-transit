@@ -661,3 +661,146 @@ h1 {
   line-height: 1.5;
   color: var(--muted);
 }
+
+/* ---------- tracked arrival ---------- */
+
+.tracked {
+  flex: none;
+  margin: 8px 16px 0;
+  padding: 10px 12px 9px;
+  border-radius: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tracked[hidden] { display: none; }
+
+.tracked.urgent {
+  border-color: var(--green);
+  box-shadow: 0 0 0 1px var(--green), var(--shadow);
+}
+
+.tracked-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tracked-lower { align-items: flex-end; }
+
+.tracked-dir {
+  font-size: 13px;
+  font-weight: 650;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracked-close {
+  flex: none;
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--chip);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tracked-close:active { transform: scale(0.94); }
+
+.tracked-sub {
+  min-width: 0;
+  padding-bottom: 2px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracked-clock {
+  flex: none;
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.tracked-count {
+  font-size: 30px;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tracked-count.due { color: var(--amber); }
+
+.tracked-at {
+  margin-top: 3px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.tracked-chips { gap: 6px; margin-top: 2px; }
+
+.chip {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--green);
+  border-color: transparent;
+  color: var(--green-ink);
+}
+
+.chip:disabled { opacity: 0.7; }
+
+/* Arrival chips are buttons so they can be tapped to track. */
+.eta {
+  border: 0;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s ease;
+}
+
+.eta:active { transform: scale(0.96); }
+
+.eta.tracked {
+  outline: 2px solid var(--green);
+  outline-offset: 1px;
+}
+
+.eta.first.tracked,
+.eta.due.tracked { outline-color: #fff; }
+
+.info-block .info-note { margin-top: 0; }

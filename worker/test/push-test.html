@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Push crypto test</title>
+<style>
+  body { font: 14px/1.5 ui-monospace, Menlo, monospace; padding: 20px; }
+  .pass { color: #0b7a45; }
+  .fail { color: #c00; font-weight: 700; }
+</style>
+</head>
+<body>
+<h1>Web Push crypto test</h1>
+<p>Serve the repo with <code>python3 -m http.server 8000</code> and open
+<code>/worker/test/push-test.html</code>. It checks RFC 8291 encryption and
+RFC 8292 VAPID signing using the worker's own functions.</p>
+<pre id="out">running…</pre>
+
+<script type="module">
+import {
+  b64urlEncode, b64urlDecode, encryptPayload, vapidHeaders,
+} from '../worker.js';
+
+const out = document.getElementById('out');
+const lines = [];
+let failures = 0;
+
+function check(name, ok, detail = '') {
+  if (!ok) failures += 1;
+  lines.push(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail && !ok ? ` — ${detail}` : ''}`);
+  out.innerHTML = lines.map((line) => (
+    line.startsWith('PASS')
+      ? `<span class="pass">${line}</span>`
+      : `<span class="fail">${line}</span>`
+  )).join('\n');
+}
+
+const utf8 = new TextEncoder();
+
+function concat(...arrays) {
+  const total = arrays.reduce((n, a) => n + a.length, 0);
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const array of arrays) {
+    merged.set(array, offset);
+    offset += array.length;
+  }
+  return merged;
+}
+
+async function hkdf(salt, ikm, info, length) {
+  const key = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'HKDF', hash: 'SHA-256', salt, info },
+    key,
+    length * 8,
+  );
+  return new Uint8Array(bits);
+}
+
+/* The receiving side of RFC 8291, as a browser would do it. */
+async function decryptPayload(privateKey, uaPublic, authSecret, message) {
+  const salt = message.slice(0, 16);
+  const idLength = message[20];
+  const asPublic = message.slice(21, 21 + idLength);
+  const ciphertext = message.slice(21 + idLength);
+
+  const asKey = await crypto.subtle.importKey(
+    'raw', asPublic, { name: 'ECDH', namedCurve: 'P-256' }, false, [],
+  );
+  const shared = new Uint8Array(await crypto.subtle.deriveBits(
+    { name: 'ECDH', public: asKey }, privateKey, 256,
+  ));
+
+  const context = concat(utf8.encode('WebPush: info\0'), uaPublic, asPublic);
+  const ikm = await hkdf(authSecret, shared, context, 32);
+  const cek = await hkdf(salt, ikm, utf8.encode('Content-Encoding: aes128gcm\0'), 16);
+  const nonce = await hkdf(salt, ikm, utf8.encode('Content-Encoding: nonce\0'), 12);
+
+  const aesKey = await crypto.subtle.importKey('raw', cek, 'AES-GCM', false, ['decrypt']);
+  const plaintext = new Uint8Array(await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: nonce, tagLength: 128 },
+    aesKey,
+    ciphertext,
+  ));
+
+  const delimiter = plaintext[plaintext.length - 1];
+  if (delimiter !== 2) throw new Error(`unexpected padding delimiter ${delimiter}`);
+  return JSON.parse(new TextDecoder().decode(plaintext.slice(0, -1)));
+}
+
+async function main() {
+  // Subscriber keys, as PushManager would create them.
+  const ua = await crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'],
+  );
+  const uaPublic = new Uint8Array(await crypto.subtle.exportKey('raw', ua.publicKey));
+  const authSecret = crypto.getRandomValues(new Uint8Array(16));
+
+  const subscription = {
+    endpoint: 'https://web.push.apple.com/QGVsbG8td29ybGQ',
+    keys: {
+      p256dh: b64urlEncode(uaPublic),
+      auth: b64urlEncode(authSecret),
+    },
+  };
+
+  const payload = {
+    title: '85 in 5 min',
+    body: "Healthy Village, King's Road · Stop 001276",
+    tag: 'bus-test-1',
+    url: './',
+  };
+
+  const message = await encryptPayload(subscription, payload);
+  check('encrypted body is non-empty', message.length > 100, `${message.length} bytes`);
+
+  const decrypted = await decryptPayload(ua.privateKey, uaPublic, authSecret, message);
+  check('payload round-trips', JSON.stringify(decrypted) === JSON.stringify(payload),
+    JSON.stringify(decrypted));
+
+  // A tampered byte must not decrypt.
+  const tampered = message.slice();
+  tampered[tampered.length - 1] ^= 0xff;
+  let tamperFailed = false;
+  try {
+    await decryptPayload(ua.privateKey, uaPublic, authSecret, tampered);
+  } catch {
+    tamperFailed = true;
+  }
+  check('tampered ciphertext is rejected', tamperFailed);
+
+  // VAPID JWT.
+  const signing = await crypto.subtle.generateKey(
+    { name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'],
+  );
+  const signingJwk = await crypto.subtle.exportKey('jwk', signing.privateKey);
+  const signingPublic = new Uint8Array(await crypto.subtle.exportKey('raw', signing.publicKey));
+
+  const headers = await vapidHeaders(
+    subscription.endpoint,
+    signingJwk,
+    b64urlEncode(signingPublic),
+    'mailto:test@example.com',
+  );
+  const auth = headers.Authorization || '';
+  check('authorization uses vapid scheme', auth.startsWith('vapid t='), auth.slice(0, 20));
+  check('public key included in header', auth.includes(`, k=${b64urlEncode(signingPublic)}`));
+
+  const token = auth.replace(/^vapid t=/, '').split(', k=')[0];
+  const [headerPart, claimsPart, signaturePart] = token.split('.');
+  const verifyKey = await crypto.subtle.importKey(
+    'raw', signingPublic, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify'],
+  );
+  const valid = await crypto.subtle.verify(
+    { name: 'ECDSA', hash: 'SHA-256' },
+    verifyKey,
+    b64urlDecode(signaturePart),
+    utf8.encode(`${headerPart}.${claimsPart}`),
+  );
+  check('JWT signature verifies', valid);
+
+  const claims = JSON.parse(new TextDecoder().decode(b64urlDecode(claimsPart)));
+  check('JWT audience is the push origin', claims.aud === 'https://web.push.apple.com', claims.aud);
+  check('JWT subject is set', claims.sub === 'mailto:test@example.com', claims.sub);
+  check('JWT expires in the future', claims.exp > Date.now() / 1000, String(claims.exp));
+
+  lines.push('');
+  lines.push(failures ? `${failures} CHECK(S) FAILED` : 'ALL CHECKS PASSED');
+  out.innerHTML = lines.map((line) => {
+    if (line.startsWith('FAIL') || line.includes('FAILED')) return `<span class="fail">${line}</span>`;
+    if (line.startsWith('PASS')) return `<span class="pass">${line}</span>`;
+    return line;
+  }).join('\n');
+}
+
+main().catch((error) => {
+  check('test harness ran', false, error && error.message);
+  console.error(error);
+});
+</script>
+</body>
+</html>
