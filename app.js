@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '1.7.0';
-const APP_BUILD = '21 Nov 2026, 23:50 HKT';
+const APP_VERSION = '1.8.0';
+const APP_BUILD = '22 Nov 2026, 00:10 HKT';
 
 PAGES.push({
   id: 'info',
@@ -554,9 +554,21 @@ function stopGroups(page) {
     }
   }
 
-  return [...groups.values()].sort((a, b) => (
+  const sorted = [...groups.values()].sort((a, b) => (
     stopOrder.get(a.stop_id) - stopOrder.get(b.stop_id) || a.order - b.order
   ));
+
+  if (page.stopOrder) {
+    const rank = new Map(page.stopOrder.map((name, i) => [name, i]));
+    const fallback = page.stopOrder.length;
+    sorted.sort((a, b) => {
+      const ra = rank.has(a.name) ? rank.get(a.name) : fallback;
+      const rb = rank.has(b.name) ? rank.get(b.name) : fallback;
+      return ra - rb;
+    });
+  }
+
+  return sorted;
 }
 
 function nearestHtml(page) {
@@ -616,25 +628,44 @@ function sourceLine(page) {
 }
 
 function segmentHtml(page) {
+  const from = page.from || page.routes[0].from;
+  const to = page.to || page.routes[0].to;
+  const blocks = [
+    { stop: from, label: '→ New Trend Plaza', field: 'from' },
+    { stop: to, label: '← Taikoo Place', field: 'to' },
+  ];
+
   let html = `<p class="segment-note">Next departures from Taikoo Place and arrivals at New Trend Plaza.</p>`;
 
-  for (const route of page.routes) {
-    const cache = state.segments.get(route.code);
+  for (const block of blocks) {
+    const point = (typeof block.stop.lat === 'number' && typeof block.stop.lon === 'number')
+      ? { lat: block.stop.lat, lon: block.stop.lon }
+      : null;
+    const dist = state.lastPos && point ? distanceM(state.lastPos, point) : null;
+    const meta = [
+      block.label,
+      Number.isFinite(dist) ? `${fmtDistance(dist)} away` : '',
+    ].filter(Boolean).join(' · ');
+
     html += `
-      <section class="segment-route">
-        <div class="segment-head">
-          <span class="badge">${esc(route.code)}</span>
-          <span class="segment-desc">Taikoo Place → New Trend Plaza</span>
+      <section class="stop-group">
+        <div class="stop-group-head">
+          <div class="stop-group-main">
+            <div class="stop-group-name">${esc(block.stop.name)}</div>
+            <div class="stop-group-dir">${esc(meta)}</div>
+          </div>
+          <div class="stop-group-id">Stop ${esc(block.stop.stop_id)}</div>
         </div>
-        <article class="card segment-card">
-          <div class="segment-row">
-            <span class="segment-label">Taikoo</span>
-            <div class="etas">${etaPills(cache && cache.from)}</div>
-          </div>
-          <div class="segment-row">
-            <span class="segment-label">New Trend</span>
-            <div class="etas">${etaPills(cache && cache.to)}</div>
-          </div>
+        <article class="card shared">
+          ${page.routes.map((route) => {
+            const cache = state.segments.get(route.code);
+            const list = cache ? cache[block.field] : null;
+            return `
+              <div class="route-row">
+                <span class="badge">${esc(route.code)}</span>
+                <div class="etas">${etaPills(list)}</div>
+              </div>`;
+          }).join('')}
         </article>
       </section>`;
   }
@@ -669,7 +700,7 @@ function infoHtml() {
     </section>
     <p class="info-note">
       Live arrivals from the Transport Department, data.gov.hk and TfL.
-      Pages: Citybus, KMB, Minibuses, London and Taikoo → New Trend.
+      Pages: Citybus, KMB, Minibuses, Taikoo → New Trend and London.
     </p>`;
 }
 

@@ -2,8 +2,8 @@
 
 A one-screen-per-page iPhone web app showing the next arrivals for the
 buses around Braemar Hill and in Wimbledon, London, in six swipeable
-pages: **Citybus**, **KMB**, **Minibuses**, **London**,
-**Taikoo → New Trend** and **Info**.
+pages: **Citybus**, **KMB**, **Minibuses**, **Taikoo → New Trend**,
+**London** and **Info**.
 
 **Citybus** — routes **27**, **85**, **25A** and **25** (outbound):
 
@@ -43,8 +43,9 @@ pages: **Citybus**, **KMB**, **Minibuses**, **London**,
 
 **Taikoo → New Trend** — every Citybus route whose stop order runs from
 Taikoo Place before New Trend Plaza: **77**, **81**, **81A**, **85**,
-**85A**, **8H**, **99** and **N8X**. Each route shows its next arrivals at
-both ends of the segment.
+**85A**, **8H**, **99** and **N8X**. The page has two stop groups —
+Taikoo Place and New Trend Plaza — each listing all eight routes with
+their next arrivals, stop IDs and distance.
 
 **Info** — lists the live-data endpoints, app version and build date/time.
 
@@ -66,17 +67,19 @@ poles serve more than one direction.
 
 ## What it does
 
-- Six pages — **Citybus**, **KMB**, **Minibuses**, **London**,
-  **Taikoo → New Trend** and **Info** — swipe left/right to switch, or tap
-  the dots next to the status line. Each page keeps its own scroll position.
+- Six pages — **Citybus**, **KMB**, **Minibuses**,
+  **Taikoo → New Trend**, **London** and **Info** — swipe left/right to
+  switch, or tap the dots next to the status line. Each page keeps its own
+  scroll position.
 - Shows the next 3 buses for each saved stop, with a large countdown and
   the actual arrival clock time with seconds underneath (e.g. `12 min`
   above `21:48:30`).
 - Arrivals are grouped by **stop and direction**, not by route: each stop
   heading shows the direction, distance and stop ID, with every route
   serving that stop listed underneath.
-- The **Taikoo → New Trend** page lists every route that runs from Taikoo
-  Place to New Trend Plaza, with the next arrivals at both ends.
+- The **Taikoo → New Trend** page uses the same grouping: one Taikoo Place
+  group and one New Trend Plaza group, each listing all eight routes
+  between them.
 - Stops served by more than one route, or with groups in both directions,
   get a matching lighter card background so the group stands out.
 - Citybus and KMB arrivals are colour-coded: green/grey entries are **live**
@@ -181,6 +184,8 @@ arriving soonest and labels it with that group's destination.
   type 1) is tracked, in the directions shown above.
 - London arrivals come from TfL's StopPoint API and their clock times are
   shown in London time (`Europe/London`), whatever the phone's timezone.
+- The London page puts **Darlaston Road** first, followed by
+  **Wimbledon Station** and **Francis Grove**, then the remaining stops.
 - Hong Kong bus clock times are shown in Hong Kong time
   (`Asia/Hong_Kong`), so they stay correct when travelling.
 - The Taikoo → New Trend page shows each route's next arrivals at both
