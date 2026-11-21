@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.3.0';
-const APP_BUILD = '22 Nov 2026, 02:55 HKT';
+const APP_VERSION = '2.3.1';
+const APP_BUILD = '22 Nov 2026, 03:02 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */

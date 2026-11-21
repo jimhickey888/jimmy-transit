@@ -14,6 +14,13 @@ pages: **Citybus**, **Taikoo ↔ New Trend**, **KMB**, **Minibuses**,
 | 25A | 1 — Exhibition Centre Station · 23 — Flora Garden, Cloud View Road |
 | 25 | 1 — Central Ferry, Man Kwong Street · 31 — Flora Garden, Cloud View Road |
 
+Stop groups are shown in this order: **Taikoo Place**, **New Trend Plaza**,
+**Hanking Court**, **Kiangsu-Chekiang College**, **Flora Garden**,
+**Central Ferry**, **Exhibition Centre**, then any remaining stops
+(Healthy Village). The order is set by `stopOrder` for the Citybus page in
+`bake.py` (the name comes from the government feed, so it is “Hanking
+Court”, not “Hangking”).
+
 **KMB** — route **108**, with two outbound and one inbound stop:
 
 | Direction | Stops |

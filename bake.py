@@ -419,7 +419,16 @@ def main():
     ]
 
     pages = [
-        {"id": "citybus", "title": "Citybus", "api": "ctb", "routes": citybus},
+        {"id": "citybus", "title": "Citybus", "api": "ctb", "routes": citybus,
+         "stopOrder": [
+             "Taikoo Place, King's Road",
+             "New Trend Plaza, King's Road",
+             "Hanking Court, Cloud View Road",
+             "Kiangsu-Chekiang College, Braemar Hill Road",
+             "Flora Garden, Cloud View Road",
+             "Central Ferry - Discovery Bay Ferry, Man Kwong Street",
+             "Exhibition Centre Station",
+         ]},
         {"id": "segment", "title": "Taikoo", "subtitle": "↔ New Trend Plaza · both directions",
          "api": "segment", "directions": segment_directions},
         {"id": "kmb", "title": "KMB", "api": "kmb", "routes": kmb},
