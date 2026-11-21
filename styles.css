@@ -286,6 +286,14 @@ h1 {
   opacity: 0.9;
 }
 
+.nearest-eta-vehicle {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+  opacity: 0.8;
+}
+
 /* ---------- routes ---------- */
 
 .route {
@@ -489,6 +497,15 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
+.eta-vehicle {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--muted);
+  opacity: 0.9;
+}
+
 .eta.first {
   background: var(--green);
   color: var(--green-ink);
@@ -536,6 +553,18 @@ h1 {
 }
 
 .eta.due .eta-time {
+  color: #fff;
+  opacity: 0.9;
+}
+
+.eta.sched .eta-vehicle,
+.eta.first .eta-vehicle,
+.eta.first.due .eta-vehicle {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.eta.due .eta-vehicle {
   color: #fff;
   opacity: 0.9;
 }

@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '1.8.0';
-const APP_BUILD = '22 Nov 2026, 00:10 HKT';
+const APP_VERSION = '1.8.1';
+const APP_BUILD = '22 Nov 2026, 00:20 HKT';
 
 PAGES.push({
   id: 'info',
@@ -69,7 +69,7 @@ function sortedEntries(list, now) {
     .map((entry) => {
       const m = minutesFrom(entry, now);
       if (m === null) return null;
-      return { m, scheduled: !!entry.scheduled, time: clockFrom(entry) };
+      return { m, scheduled: !!entry.scheduled, time: clockFrom(entry), vehicle: entry.vehicle || '' };
     })
     .filter(Boolean)
     .sort((a, b) => a.m - b.m);
@@ -266,6 +266,7 @@ async function fetchEta(page, route, stop) {
            is in another timezone. */
         timeZone: LONDON_TZ,
         remarks: row.destinationName || '',
+        vehicle: row.vehicleId || '',
         scheduled: false,
       }));
 
@@ -453,7 +454,7 @@ function etaPills(cached) {
   const entries = sortedEntries(cached.list, Date.now()).slice(0, MAX_ETAS);
   if (!entries.length) return '<span class="empty">No arrivals right now</span>';
 
-  return entries.map(({ m, scheduled, time }, i) => {
+  return entries.map(({ m, scheduled, time, vehicle }, i) => {
     const classes = ['eta'];
     if (scheduled) classes.push('sched');
     else if (i === 0) classes.push('first');
@@ -462,11 +463,12 @@ function etaPills(cached) {
     const cls = classes.join(' ');
     const title = scheduled ? 'Scheduled time' : 'Live arrival';
     const timeHtml = time ? `<span class="eta-time">${esc(time)}</span>` : '';
+    const vehicleHtml = vehicle ? `<span class="eta-vehicle">Bus ${esc(vehicle)}</span>` : '';
 
     if (m <= 0) {
-      return `<span class="${cls}" title="${title}"><span class="eta-main">Due</span>${timeHtml}</span>`;
+      return `<span class="${cls}" title="${title}"><span class="eta-main">Due</span>${timeHtml}${vehicleHtml}</span>`;
     }
-    return `<span class="${cls}" title="${title}"><span class="eta-main"><b>${m}</b><small>min</small></span>${timeHtml}</span>`;
+    return `<span class="${cls}" title="${title}"><span class="eta-main"><b>${m}</b><small>min</small></span>${timeHtml}${vehicleHtml}</span>`;
   }).join('');
 }
 
@@ -579,6 +581,7 @@ function nearestHtml(page) {
   const cached = state.etas.get(keyOf(page, route, stop));
   let eta = '…';
   let etaTime = '';
+  let etaVehicle = '';
   let scheduled = false;
 
   if (cached) {
@@ -591,6 +594,7 @@ function nearestHtml(page) {
       } else {
         eta = entries[0].m <= 0 ? 'Due' : `${entries[0].m} min`;
         etaTime = entries[0].time;
+        etaVehicle = entries[0].vehicle;
         scheduled = entries[0].scheduled;
       }
     }
@@ -610,6 +614,7 @@ function nearestHtml(page) {
       <div class="nearest-eta${scheduled ? ' sched' : ''}">
         <span class="nearest-eta-main">${esc(eta)}</span>
         ${etaTime ? `<span class="nearest-eta-time">${esc(etaTime)}</span>` : ''}
+        ${etaVehicle ? `<span class="nearest-eta-vehicle">Bus ${esc(etaVehicle)}</span>` : ''}
       </div>
     </div>`;
 }

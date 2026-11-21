@@ -74,6 +74,8 @@ poles serve more than one direction.
 - Shows the next 3 buses for each saved stop, with a large countdown and
   the actual arrival clock time with seconds underneath (e.g. `12 min`
   above `21:48:30`).
+- Where the operator publishes a vehicle ID (TfL), each arrival also shows
+  the fleet bus ID.
 - Arrivals are grouped by **stop and direction**, not by route: each stop
   heading shows the direction, distance and stop ID, with every route
   serving that stop listed underneath.
@@ -184,6 +186,9 @@ arriving soonest and labels it with that group's destination.
   type 1) is tracked, in the directions shown above.
 - London arrivals come from TfL's StopPoint API and their clock times are
   shown in London time (`Europe/London`), whatever the phone's timezone.
+- TfL predictions include a fleet vehicle ID, shown as `Bus …` on the
+  London cards. Citybus, KMB and GMB open data do not publish vehicle IDs,
+  so those pages do not show one.
 - The London page puts **Darlaston Road** first, followed by
   **Wimbledon Station** and **Francis Grove**, then the remaining stops.
 - Hong Kong bus clock times are shown in Hong Kong time
