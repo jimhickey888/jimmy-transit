@@ -546,6 +546,61 @@ h1 {
   line-height: 30px;
 }
 
+/* ---------- segment page ---------- */
+
+.segment-note {
+  margin: 16px 2px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.segment-route { margin-top: 22px; }
+
+.segment-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 2px 9px;
+}
+
+.segment-desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.segment-card { padding: 12px 16px 13px; }
+
+.segment-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.segment-row:first-child { padding-top: 0; }
+.segment-row:last-child { padding-bottom: 0; }
+
+.segment-row + .segment-row {
+  border-top: 1px solid var(--line);
+}
+
+.segment-label {
+  flex: none;
+  width: 66px;
+  padding-top: 8px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.segment-row .etas {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ---------- footer ---------- */
 
 .foot {

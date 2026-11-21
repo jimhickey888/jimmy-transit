@@ -1,15 +1,16 @@
 # Jimmy Bus Tracker
 
 A one-screen-per-page iPhone web app showing the next arrivals for the
-buses around Braemar Hill and in Wimbledon, London, in five swipeable
-pages: **Citybus**, **KMB**, **Minibuses**, **London** and **Info**.
+buses around Braemar Hill and in Wimbledon, London, in six swipeable
+pages: **Citybus**, **KMB**, **Minibuses**, **London**,
+**Taikoo → New Trend** and **Info**.
 
 **Citybus** — routes **27**, **85**, **25A** and **25** (outbound):
 
 | Route | Stops |
 |-------|-------|
 | 27 | 4 — New Trend Plaza, King's Road |
-| 85 | 23 Taikoo Place · 30 New Trend Plaza · 36 Hanking Court (Cloud View Rd) · 41 Kiangsu-Chekiang College (Braemar Hill Rd) |
+| 85 | 23 Taikoo Place · 26 Healthy Village (King's Rd) · 30 New Trend Plaza · 36 Hanking Court (Cloud View Rd) · 41 Kiangsu-Chekiang College (Braemar Hill Rd) |
 | 25A | 1 — Exhibition Centre Station · 23 — Flora Garden, Cloud View Road |
 | 25 | 1 — Central Ferry, Man Kwong Street · 31 — Flora Garden, Cloud View Road |
 
@@ -40,6 +41,11 @@ pages: **Citybus**, **KMB**, **Minibuses**, **London** and **Info**.
 | 93 | towards North Cheam | Wimbledon Village · Wimbledon Hill Road · Wimbledon Station |
 | 93 | towards Putney Bridge | Morden Road Tram Stop · South Wimbledon Station · Wimbledon Hill Road |
 
+**Taikoo → New Trend** — every Citybus route whose stop order runs from
+Taikoo Place before New Trend Plaza: **77**, **81**, **81A**, **85**,
+**85A**, **8H**, **99** and **N8X**. Each route shows its next arrivals at
+both ends of the segment.
+
 **Info** — lists the live-data endpoints, app version and build date/time.
 
 Live data comes from the Transport Department's **eTA GMB** API
@@ -60,18 +66,19 @@ poles serve more than one direction.
 
 ## What it does
 
-- Five pages — **Citybus**, **KMB**, **Minibuses**, **London** and
-  **Info** — swipe left/right to switch, or tap the dots next to the status
-  line. Each page keeps its own scroll position.
+- Six pages — **Citybus**, **KMB**, **Minibuses**, **London**,
+  **Taikoo → New Trend** and **Info** — swipe left/right to switch, or tap
+  the dots next to the status line. Each page keeps its own scroll position.
 - Shows the next 3 buses for each saved stop, with a large countdown and
   the actual arrival clock time with seconds underneath (e.g. `12 min`
   above `21:48:30`).
 - Arrivals are grouped by **stop and direction**, not by route: each stop
-  heading shows the direction and distance, with every route serving that
-  stop listed underneath.
+  heading shows the direction, distance and stop ID, with every route
+  serving that stop listed underneath.
+- The **Taikoo → New Trend** page lists every route that runs from Taikoo
+  Place to New Trend Plaza, with the next arrivals at both ends.
 - Stops served by more than one route, or with groups in both directions,
-  get a matching lighter card background so the group stands out. TfL
-  groups also show their stop ID.
+  get a matching lighter card background so the group stands out.
 - Citybus and KMB arrivals are colour-coded: green/grey entries are **live**
   (GPS-based) predictions, and blue entries are **scheduled** times. Live
   data is shown wherever the operator publishes it; scheduled times fill the
@@ -79,7 +86,7 @@ poles serve more than one direction.
 - Refreshes every 30 seconds while the screen is open.
 - Uses your location to highlight the nearest stop *on the page you are
   looking at* in a strip at the top, and to show the straight-line distance
-  to every saved stop on its card. Location is optional — the saved
+  to every saved stop in its heading. Location is optional — the saved
   stops always work.
 - Installable to the Home Screen; runs full-screen with its own icon.
 - Works in light and dark mode.
@@ -176,9 +183,13 @@ arriving soonest and labels it with that group's destination.
   shown in London time (`Europe/London`), whatever the phone's timezone.
 - Hong Kong bus clock times are shown in Hong Kong time
   (`Asia/Hong_Kong`), so they stay correct when travelling.
-- The distance on each card is the straight-line distance (“as the crow
-  flies”) from your last known position, shown only when location access is
-  allowed. It is not a routed walking path and needs no extra map service.
+- The Taikoo → New Trend page shows each route's next arrivals at both
+  ends of the segment. Citybus does not expose vehicle IDs, so the two
+  lists are not paired bus-by-bus.
+- The distance in each stop heading is the straight-line distance (“as the
+  crow flies”) from your last known position, shown only when location
+  access is allowed. It is not a routed walking path and needs no extra map
+  service.
 - If every Citybus card is empty for a long stretch during service hours,
   the Citybus feed itself may be down; it usually recovers without a change
   here. The minibus page is unaffected.

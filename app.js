@@ -10,8 +10,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '1.6.0';
-const APP_BUILD = '21 Nov 2026, 23:30 HKT';
+const APP_VERSION = '1.7.0';
+const APP_BUILD = '21 Nov 2026, 23:50 HKT';
 
 PAGES.push({
   id: 'info',
@@ -26,6 +26,7 @@ const MOVE_THRESHOLD_M = 20;
 
 const state = {
   etas: new Map(),     // key -> { enabled, desc, list, at }
+  segments: new Map(), // segment route code -> { from, to, at }
   nearest: new Map(),  // page id -> { route, stop, dist }
   lastUpdate: null,
   error: false,
@@ -307,6 +308,35 @@ async function fetchEta(page, route, stop) {
   state.etas.set(key, { enabled: true, desc: '', dest, list, at: Date.now() });
 }
 
+async function fetchSegment(route) {
+  try {
+    const [fromRows, toRows] = await Promise.all([
+      ctbStopEta(route.from.stop_id),
+      ctbStopEta(route.to.stop_id),
+    ]);
+
+    const pick = (rows, seq) => rows
+      .filter((row) => row.route === route.route && row.seq === seq && row.eta)
+      .sort((a, b) => Date.parse(a.eta) - Date.parse(b.eta))
+      .map((row) => ({
+        timestamp: row.eta,
+        timeZone: HK_TZ,
+        remarks: row.rmk || '',
+        scheduled: isWholeMinute(row.eta),
+      }));
+
+    state.segments.set(route.code, {
+      from: { enabled: true, desc: '', list: pick(fromRows, route.fromSeq) },
+      to: { enabled: true, desc: '', list: pick(toRows, route.toSeq) },
+      at: Date.now(),
+    });
+  } catch (err) {
+    const failed = { enabled: false, desc: 'Citybus feed unavailable', list: [] };
+    state.segments.set(route.code, { from: failed, to: failed, at: Date.now() });
+    throw err;
+  }
+}
+
 async function refresh(force = false) {
   if (state.busy) return;
   if (!force && state.lastUpdate && Date.now() - state.lastUpdate.getTime() < 5000) return;
@@ -318,7 +348,12 @@ async function refresh(force = false) {
   setBusy(true);
 
   const jobs = new Map();
+  const segmentRoutes = [];
   for (const page of PAGES) {
+    if (page.api === 'segment') {
+      segmentRoutes.push(...page.routes);
+      continue;
+    }
     for (const route of page.routes) {
       for (const stop of route.bookmarks) {
         jobs.set(keyOf(page, route, stop), { page, route, stop });
@@ -330,9 +365,10 @@ async function refresh(force = false) {
     }
   }
 
-  const results = await Promise.allSettled(
-    [...jobs.values()].map(({ page, route, stop }) => fetchEta(page, route, stop)),
-  );
+  const results = await Promise.allSettled([
+    ...[...jobs.values()].map(({ page, route, stop }) => fetchEta(page, route, stop)),
+    ...segmentRoutes.map((route) => fetchSegment(route)),
+  ]);
 
   state.error = results.length > 0 && results.every((r) => r.status === 'rejected');
   state.lastUpdate = new Date();
@@ -363,6 +399,7 @@ async function updateNearest(pos) {
   const pending = [];
 
   for (const page of PAGES) {
+    if (page.api === 'segment') continue;
     const next = computeNearest(page, pos);
     if (!next) continue;
 
@@ -409,9 +446,7 @@ function startGeolocation() {
 
 /* ---------------- rendering ---------------- */
 
-function etasHtml(page, route, stop) {
-  const cached = state.etas.get(keyOf(page, route, stop));
-
+function etaPills(cached) {
   if (!cached) return '<span class="empty">Loading…</span>';
   if (!cached.enabled) return `<span class="empty">${esc(cached.desc || 'Not available')}</span>`;
 
@@ -433,6 +468,10 @@ function etasHtml(page, route, stop) {
     }
     return `<span class="${cls}" title="${title}"><span class="eta-main"><b>${m}</b><small>min</small></span>${timeHtml}</span>`;
   }).join('');
+}
+
+function etasHtml(page, route, stop) {
+  return etaPills(state.etas.get(keyOf(page, route, stop)));
 }
 
 function stopPoint(route, stop) {
@@ -576,6 +615,34 @@ function sourceLine(page) {
   return 'Real-time data from data.gov.hk<br>Citybus';
 }
 
+function segmentHtml(page) {
+  let html = `<p class="segment-note">Next departures from Taikoo Place and arrivals at New Trend Plaza.</p>`;
+
+  for (const route of page.routes) {
+    const cache = state.segments.get(route.code);
+    html += `
+      <section class="segment-route">
+        <div class="segment-head">
+          <span class="badge">${esc(route.code)}</span>
+          <span class="segment-desc">Taikoo Place → New Trend Plaza</span>
+        </div>
+        <article class="card segment-card">
+          <div class="segment-row">
+            <span class="segment-label">Taikoo</span>
+            <div class="etas">${etaPills(cache && cache.from)}</div>
+          </div>
+          <div class="segment-row">
+            <span class="segment-label">New Trend</span>
+            <div class="etas">${etaPills(cache && cache.to)}</div>
+          </div>
+        </article>
+      </section>`;
+  }
+
+  html += `<footer class="foot"><p>${sourceLine(page)}</p></footer>`;
+  return html;
+}
+
 function infoHtml() {
   const endpoints = [
     ['Minibuses (GMB)', 'https://data.etagmb.gov.hk/eta/route-stop/{route_id}/{route_seq}/{stop_seq}'],
@@ -602,7 +669,7 @@ function infoHtml() {
     </section>
     <p class="info-note">
       Live arrivals from the Transport Department, data.gov.hk and TfL.
-      Pages: Citybus, KMB, Minibuses and London.
+      Pages: Citybus, KMB, Minibuses, London and Taikoo → New Trend.
     </p>`;
 }
 
@@ -612,6 +679,11 @@ function renderPage(page) {
 
   if (page.api === 'info') {
     el.innerHTML = infoHtml();
+    return;
+  }
+
+  if (page.api === 'segment') {
+    el.innerHTML = segmentHtml(page);
     return;
   }
 
@@ -631,9 +703,7 @@ function renderPage(page) {
       group.label,
       Number.isFinite(dist) ? `${fmtDistance(dist)} away` : '',
     ].filter(Boolean).join(' · ');
-    const idHtml = page.api === 'tfl'
-      ? `<div class="stop-group-id">Stop ${esc(group.stop_id)}</div>`
-      : '';
+    const idHtml = `<div class="stop-group-id">Stop ${esc(group.stop_id)}</div>`;
 
     html += `
       <section class="stop-group">

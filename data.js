@@ -183,6 +183,11 @@ const PAGES = [
             "name": "Taikoo Place, King's Road"
           },
           {
+            "seq": 26,
+            "stop_id": "001276",
+            "name": "Healthy Village, King's Road"
+          },
+          {
             "seq": 30,
             "stop_id": "001282",
             "name": "New Trend Plaza, King's Road"
@@ -2005,6 +2010,134 @@ const PAGES = [
             "lon": -0.206444
           }
         ]
+      }
+    ]
+  },
+  {
+    "id": "segment",
+    "title": "Taikoo",
+    "subtitle": "→ New Trend Plaza · 8 routes",
+    "api": "segment",
+    "routes": [
+      {
+        "code": "77",
+        "route": "77",
+        "dirCode": "I",
+        "fromSeq": 19,
+        "toSeq": 26,
+        "from": {
+          "stop_id": "001273",
+          "name": "Taikoo Place, King's Road"
+        },
+        "to": {
+          "stop_id": "001282",
+          "name": "New Trend Plaza, King's Road"
+        }
+      },
+      {
+        "code": "81",
+        "route": "81",
+        "dirCode": "O",
+        "fromSeq": 24,
+        "toSeq": 32,
+        "from": {
+          "stop_id": "001273",
+          "name": "Taikoo Place, King's Road"
+        },
+        "to": {
+          "stop_id": "001282",
+          "name": "New Trend Plaza, King's Road"
+        }
+      },
+      {
+        "code": "81A",
+        "route": "81A",
+        "dirCode": "O",
+        "fromSeq": 19,
+        "toSeq": 26,
+        "from": {
+          "stop_id": "001273",
+          "name": "Taikoo Place, King's Road"
+        },
+        "to": {
+          "stop_id": "001282",
+          "name": "New Trend Plaza, King's Road"
+        }
+      },
+      {
+        "code": "85",
+        "route": "85",
+        "dirCode": "O",
+        "fromSeq": 23,
+        "toSeq": 30,
+        "from": {
+          "stop_id": "001273",
+          "name": "Taikoo Place, King's Road"
+        },
+        "to": {
+          "stop_id": "001282",
+          "name": "New Trend Plaza, King's Road"
+        }
+      },
+      {
+        "code": "85A",
+        "route": "85A",
+        "dirCode": "O",
+        "fromSeq": 12,
+        "toSeq": 20,
+        "from": {
+          "stop_id": "001273",
+          "name": "Taikoo Place, King's Road"
+        },
+        "to": {
+          "stop_id": "001282",
+          "name": "New Trend Plaza, King's Road"
+        }
+      },
+      {
+        "code": "8H",
+        "route": "8H",
+        "dirCode": "O",
+        "fromSeq": 27,
+        "toSeq": 34,
+        "from": {
+          "stop_id": "001273",
+          "name": "Taikoo Place, King's Road"
+        },
+        "to": {
+          "stop_id": "001282",
+          "name": "New Trend Plaza, King's Road"
+        }
+      },
+      {
+        "code": "99",
+        "route": "99",
+        "dirCode": "I",
+        "fromSeq": 19,
+        "toSeq": 26,
+        "from": {
+          "stop_id": "001273",
+          "name": "Taikoo Place, King's Road"
+        },
+        "to": {
+          "stop_id": "001282",
+          "name": "New Trend Plaza, King's Road"
+        }
+      },
+      {
+        "code": "N8X",
+        "route": "N8X",
+        "dirCode": "O",
+        "fromSeq": 25,
+        "toSeq": 33,
+        "from": {
+          "stop_id": "001273",
+          "name": "Taikoo Place, King's Road"
+        },
+        "to": {
+          "stop_id": "001282",
+          "name": "New Trend Plaza, King's Road"
+        }
       }
     ]
   }
