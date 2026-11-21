@@ -232,6 +232,7 @@ function startGeolocation() {
       updateNearest(pos);
     },
     () => {
+      state.lastPos = null;
       if (state.nearest.size) {
         state.nearest.clear();
         render();
@@ -271,6 +272,23 @@ function destHtml(page, route, stop) {
   const cached = state.etas.get(keyOf(page, route, stop));
   if (!cached || !cached.dest) return '';
   return `<div class="stop-dest">→ ${esc(cached.dest)}</div>`;
+}
+
+/* Straight-line distance from the last known position to this stop.
+   Bookmark rows carry only names and sequence numbers, so look up the
+   coordinates on the route's full stop list. Needs no network call and
+   updates as the user moves. */
+function distanceHtml(route, stop) {
+  const pos = state.lastPos;
+  if (!pos) return '';
+
+  const point = route.stops.find(
+    (s) => s.seq === stop.seq && s.stop_id === stop.stop_id,
+  );
+  if (!point || typeof point.lat !== 'number' || typeof point.lon !== 'number') return '';
+
+  const dist = distanceM(pos, { lat: point.lat, lon: point.lon });
+  return `<div class="stop-dist">${fmtDistance(dist)} away</div>`;
 }
 
 function nearestHtml(page) {
@@ -341,6 +359,7 @@ function renderPage(page) {
             </div>
             <div class="stop-seq">Stop ${stop.seq}</div>
           </div>
+          ${distanceHtml(route, stop)}
           <div class="etas">${etasHtml(page, route, stop)}</div>
         </article>`;
     }

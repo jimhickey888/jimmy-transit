@@ -45,7 +45,8 @@ poles serve more than one direction.
   it; scheduled times fill the remaining slots.
 - Refreshes every 30 seconds while the screen is open.
 - Uses your location to highlight the nearest stop *on the page you are
-  looking at* in a strip at the top. Location is optional — the saved
+  looking at* in a strip at the top, and to show the straight-line distance
+  to every saved stop on its card. Location is optional — the saved
   stops always work.
 - Installable to the Home Screen; runs full-screen with its own icon.
 - Works in light and dark mode.
@@ -132,6 +133,9 @@ arriving soonest and labels it with that group's destination.
   matches the “Scheduled” label in the official Citybus app. On the rare
   occasion a live prediction lands exactly on `:00`, it will be shown as
   scheduled.
+- The distance on each card is the straight-line distance (“as the crow
+  flies”) from your last known position, shown only when location access is
+  allowed. It is not a routed walking path and needs no extra map service.
 - If every Citybus card is empty for a long stretch during service hours,
   the Citybus feed itself may be down; it usually recovers without a change
   here. The minibus page is unaffected.
