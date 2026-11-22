@@ -12,8 +12,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.9.1';
-const APP_BUILD = '22 Nov 2026, 15:49 HKT';
+const APP_VERSION = '2.9.2';
+const APP_BUILD = '22 Nov 2026, 15:51 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -446,12 +446,17 @@ async function fetchEtaLive(page, route, stop) {
         enabled: true, desc: '', dest: route.towards, list, at: Date.now(),
       });
     } catch (err) {
-      state.etas.set(key, {
-        enabled: false,
-        desc: 'London feed unavailable',
-        list: [],
-        at: Date.now(),
-      });
+      /* Keep the previous arrivals on screen rather than blanking the page;
+         the status line reports the connection problem. */
+      const previous = state.etas.get(key);
+      if (!previous || !Array.isArray(previous.list) || !previous.list.length) {
+        state.etas.set(key, {
+          enabled: false,
+          desc: 'London feed unavailable',
+          list: [],
+          at: Date.now(),
+        });
+      }
     }
     return;
   }
