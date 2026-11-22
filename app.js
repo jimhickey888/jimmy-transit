@@ -12,8 +12,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.9.0';
-const APP_BUILD = '22 Nov 2026, 15:42 HKT';
+const APP_VERSION = '2.9.1';
+const APP_BUILD = '22 Nov 2026, 15:49 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -299,11 +299,17 @@ function tflLineArrivals(line) {
 
   const entry = { at: now, rows: hit ? hit.rows : null, promise: null };
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
+  /* TfL occasionally answers in 6-9 s; cap it so one slow line cannot hold
+     the whole refresh, and fall back to the last good rows. */
+  const timer = setTimeout(() => controller.abort(), 10000);
 
   const load = (attempt) => getJson(`${TFL_API}/Line/${line}/Arrivals`, controller.signal)
     .then((rows) => (Array.isArray(rows) ? rows : []))
     .catch((err) => {
+      if (controller.signal.aborted) {
+        if (entry.rows) return entry.rows;
+        throw err;
+      }
       if (/429/.test(String(err && err.message))) {
         tflBackoffUntil = Date.now() + TFL_BACKOFF_MS;
         if (entry.rows) return entry.rows;
