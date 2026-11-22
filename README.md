@@ -300,8 +300,14 @@ arriving soonest and labels it with that group's destination.
 - TfL predictions include a fleet vehicle ID, shown as `Bus …` on the
   London cards. Citybus, KMB and GMB open data do not publish vehicle IDs,
   so those pages do not show one.
-- The London page puts **Darlaston Road** first, followed by
-  **Wimbledon Station** and **Francis Grove**, then the remaining stops.
+- The London page groups by **stop and direction of travel**, not by each
+  route's ultimate destination. Poles are labelled **Towards Wimbledon** or
+  **Away from Wimbledon**, so 57 and 131 share one group where they call at
+  the same pole. The two **Wimbledon Station** poles are labelled by where
+  they head (**towards Kingston & Putney**, **towards Tooting & North
+  Cheam**). **Darlaston Road towards Wimbledon** is first, followed by
+  Darlaston Road the other way, Wimbledon Station, Francis Grove, then the
+  remaining stops.
 - Hong Kong bus clock times are shown in Hong Kong time
   (`Asia/Hong_Kong`), so they stay correct when travelling.
 - The **Taikoo ↔ New Trend** page shows next departures and arrivals at

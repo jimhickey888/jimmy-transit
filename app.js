@@ -12,8 +12,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.8.0';
-const APP_BUILD = '22 Nov 2026, 15:35 HKT';
+const APP_VERSION = '2.9.0';
+const APP_BUILD = '22 Nov 2026, 15:42 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -794,6 +794,9 @@ function groupDistance(group) {
 }
 
 function directionOf(page, route, stop) {
+  /* London poles carry a direction label, so 57 and 131 merge at a shared
+     stop instead of splitting by ultimate destination. */
+  if (page.api === 'tfl') return stop.direction || route.towards;
   if (route.towards) return route.towards;
   const cached = state.etas.get(keyOf(page, route, stop));
   if (cached && cached.dest) return cached.dest;
@@ -820,7 +823,15 @@ function directionLabel(route, direction) {
 /* Citybus destinations come from the live rows; until those arrive we do
    not know which way the buses at a stop are heading, so leave the label
    blank rather than guessing from the route's terminal. */
+function tflDirectionRank(label) {
+  if (/^towards wimbledon$/i.test(label)) return 0;
+  if (/^towards /i.test(label)) return 1;
+  if (/^away from wimbledon$/i.test(label)) return 2;
+  return 3;
+}
+
 function groupLabel(page, route, stop, direction) {
+  if (page.api === 'tfl') return direction;
   if (page.api === 'ctb') {
     const cached = state.etas.get(keyOf(page, route, stop));
     if (!cached || !cached.dest) return '';
@@ -865,7 +876,12 @@ function stopGroups(page) {
     sorted.sort((a, b) => {
       const ra = rank.has(a.name) ? rank.get(a.name) : fallback;
       const rb = rank.has(b.name) ? rank.get(b.name) : fallback;
-      return ra - rb;
+      if (ra !== rb) return ra - rb;
+      /* Within the same stop, put the Wimbledon-bound group first. */
+      if (page.api === 'tfl' && a.stop_id === b.stop_id) {
+        return tflDirectionRank(a.label) - tflDirectionRank(b.label);
+      }
+      return 0;
     });
   }
 
