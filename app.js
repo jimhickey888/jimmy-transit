@@ -12,8 +12,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.9.2';
-const APP_BUILD = '22 Nov 2026, 15:51 HKT';
+const APP_VERSION = '2.10.0';
+const APP_BUILD = '22 Nov 2026, 16:03 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -805,9 +805,6 @@ function groupDistance(group) {
 }
 
 function directionOf(page, route, stop) {
-  /* London poles carry a direction label, so 57 and 131 merge at a shared
-     stop instead of splitting by ultimate destination. */
-  if (page.api === 'tfl') return stop.direction || route.towards;
   if (route.towards) return route.towards;
   const cached = state.etas.get(keyOf(page, route, stop));
   if (cached && cached.dest) return cached.dest;
@@ -834,15 +831,12 @@ function directionLabel(route, direction) {
 /* Citybus destinations come from the live rows; until those arrive we do
    not know which way the buses at a stop are heading, so leave the label
    blank rather than guessing from the route's terminal. */
-function tflDirectionRank(label) {
-  if (/^towards wimbledon$/i.test(label)) return 0;
-  if (/^towards /i.test(label)) return 1;
-  if (/^away from wimbledon$/i.test(label)) return 2;
-  return 3;
+function joinDestinations(list) {
+  if (list.length <= 1) return list[0] || '';
+  return `${list.slice(0, -1).join(', ')} & ${list[list.length - 1]}`;
 }
 
 function groupLabel(page, route, stop, direction) {
-  if (page.api === 'tfl') return direction;
   if (page.api === 'ctb') {
     const cached = state.etas.get(keyOf(page, route, stop));
     if (!cached || !cached.dest) return '';
@@ -859,7 +853,9 @@ function stopGroups(page) {
       if (!stopOrder.has(stop.stop_id)) stopOrder.set(stop.stop_id, stopOrder.size);
 
       const direction = directionOf(page, route, stop);
-      const groupKey = `${stop.stop_id}::${directionKey(direction)}`;
+      const groupKey = page.api === 'tfl'
+        ? stop.stop_id
+        : `${stop.stop_id}::${directionKey(direction)}`;
       let group = groups.get(groupKey);
       if (!group) {
         group = {
@@ -881,18 +877,48 @@ function stopGroups(page) {
     stopOrder.get(a.stop_id) - stopOrder.get(b.stop_id) || a.order - b.order
   ));
 
-  if (page.stopOrder) {
+  if (page.api === 'tfl') {
+    /* One group per pole, labelled with the ultimate destinations served. */
+    for (const group of groups.values()) {
+      const destinations = [];
+      for (const { route } of group.routes) {
+        if (route.towards && !destinations.includes(route.towards)) {
+          destinations.push(route.towards);
+        }
+      }
+      group.label = destinations.length ? `towards ${joinDestinations(destinations)}` : '';
+    }
+
+    /* Darlaston Road stays pinned first; everything else is nearest first. */
+    const rank = page.stopOrder
+      ? new Map(page.stopOrder.map((name, i) => [name, i]))
+      : null;
+    sorted.sort((a, b) => {
+      const pinA = a.name === 'Darlaston Road' ? 0 : 1;
+      const pinB = b.name === 'Darlaston Road' ? 0 : 1;
+      if (pinA !== pinB) return pinA - pinB;
+
+      if (state.lastPos) {
+        const da = groupDistance(a);
+        const db = groupDistance(b);
+        const hasA = Number.isFinite(da);
+        const hasB = Number.isFinite(db);
+        if (hasA && hasB && Math.abs(da - db) > 1) return da - db;
+        if (hasA !== hasB) return hasA ? -1 : 1;
+      } else if (rank) {
+        const ra = rank.has(a.name) ? rank.get(a.name) : rank.size;
+        const rb = rank.has(b.name) ? rank.get(b.name) : rank.size;
+        if (ra !== rb) return ra - rb;
+      }
+      return a.order - b.order;
+    });
+  } else if (page.stopOrder) {
     const rank = new Map(page.stopOrder.map((name, i) => [name, i]));
     const fallback = page.stopOrder.length;
     sorted.sort((a, b) => {
       const ra = rank.has(a.name) ? rank.get(a.name) : fallback;
       const rb = rank.has(b.name) ? rank.get(b.name) : fallback;
-      if (ra !== rb) return ra - rb;
-      /* Within the same stop, put the Wimbledon-bound group first. */
-      if (page.api === 'tfl' && a.stop_id === b.stop_id) {
-        return tflDirectionRank(a.label) - tflDirectionRank(b.label);
-      }
-      return 0;
+      return ra - rb;
     });
   }
 

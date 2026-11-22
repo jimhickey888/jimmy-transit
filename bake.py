@@ -135,20 +135,6 @@ SEGMENT_DIRECTIONS = [SEGMENT_FORWARD, SEGMENT_REVERSE]
 # Each entry is one direction of a route.
 # Physical pole -> direction of travel. London groups use this instead of the
 # route's ultimate destination, so 57 and 131 merge at a shared pole.
-TFL_DIRECTIONS = {
-    "490005961W": "Towards Wimbledon",
-    "490005961E": "Away from Wimbledon",
-    "490006705B2": "Towards Wimbledon",
-    "490015472L": "Towards Kingston & Putney",
-    "490015472D": "Towards Tooting & North Cheam",
-    "490014742Y": "Towards Wimbledon",
-    "490006987M": "Towards Wimbledon",
-    "490015174A": "Towards Wimbledon",
-    "490008184E": "Away from Wimbledon",
-    "490014734S": "Away from Wimbledon",
-    "490014734R": "Towards Wimbledon",
-}
-
 TFL_ROUTES = [
     {
         "code": "57", "line": "57", "towards": "Kingston",
@@ -164,6 +150,7 @@ TFL_ROUTES = [
         "code": "57", "line": "57", "towards": "Clapham Park",
         "stops": [
             ("490006705B2", "Fairfield Bus Station"),
+            ("490015472D", "Wimbledon Station"),
             ("490005961E", "Darlaston Road"),
         ],
     },
@@ -181,6 +168,7 @@ TFL_ROUTES = [
         "code": "131", "line": "131", "towards": "Tooting Broadway",
         "stops": [
             ("490006705B2", "Fairfield Bus Station"),
+            ("490015472D", "Wimbledon Station"),
             ("490005961E", "Darlaston Road"),
         ],
     },
@@ -198,6 +186,7 @@ TFL_ROUTES = [
             ("490002060A", "Morden Road Tram Stop"),
             ("490015174A", "Morden Road / South Wimbledon Station"),
             ("490014734R", "Wimbledon Hill Road"),
+            ("490015472L", "Wimbledon Station"),
         ],
     },
 ]
@@ -409,7 +398,6 @@ def main():
                 "name": name,
                 "lat": tfl_coords[stop_id]["lat"],
                 "lon": tfl_coords[stop_id]["lon"],
-                "direction": TFL_DIRECTIONS.get(stop_id, ""),
             }
             for i, (stop_id, name) in enumerate(route["stops"], start=1)
         ]
@@ -419,8 +407,7 @@ def main():
             "towards": route["towards"],
             "desc": f"towards {route['towards']}",
             "bookmarks": [
-                {"seq": s["seq"], "stop_id": s["stop_id"], "name": s["name"],
-                 "direction": s["direction"]}
+                {"seq": s["seq"], "stop_id": s["stop_id"], "name": s["name"]}
                 for s in stops
             ],
             "stops": stops,

@@ -1926,32 +1926,27 @@ const PAGES = [
           {
             "seq": 1,
             "stop_id": "490000216C",
-            "name": "South Wimbledon Station",
-            "direction": "Towards Wimbledon"
+            "name": "South Wimbledon Station"
           },
           {
             "seq": 2,
             "stop_id": "490014742Y",
-            "name": "Wimbledon Theatre",
-            "direction": "Towards Wimbledon"
+            "name": "Wimbledon Theatre"
           },
           {
             "seq": 3,
             "stop_id": "490015472L",
-            "name": "Wimbledon Station",
-            "direction": "Towards Kingston & Putney"
+            "name": "Wimbledon Station"
           },
           {
             "seq": 4,
             "stop_id": "490006987M",
-            "name": "Francis Grove",
-            "direction": "Towards Wimbledon"
+            "name": "Francis Grove"
           },
           {
             "seq": 5,
             "stop_id": "490005961W",
-            "name": "Darlaston Road",
-            "direction": "Towards Wimbledon"
+            "name": "Darlaston Road"
           }
         ],
         "stops": [
@@ -1960,40 +1955,35 @@ const PAGES = [
             "stop_id": "490000216C",
             "name": "South Wimbledon Station",
             "lat": 51.41556,
-            "lon": -0.19148,
-            "direction": "Towards Wimbledon"
+            "lon": -0.19148
           },
           {
             "seq": 2,
             "stop_id": "490014742Y",
             "name": "Wimbledon Theatre",
             "lat": 51.4192,
-            "lon": -0.19979,
-            "direction": "Towards Wimbledon"
+            "lon": -0.19979
           },
           {
             "seq": 3,
             "stop_id": "490015472L",
             "name": "Wimbledon Station",
             "lat": 51.42029,
-            "lon": -0.20659,
-            "direction": "Towards Kingston & Putney"
+            "lon": -0.20659
           },
           {
             "seq": 4,
             "stop_id": "490006987M",
             "name": "Francis Grove",
             "lat": 51.42118,
-            "lon": -0.20945,
-            "direction": "Towards Wimbledon"
+            "lon": -0.20945
           },
           {
             "seq": 5,
             "stop_id": "490005961W",
             "name": "Darlaston Road",
             "lat": 51.4163,
-            "lon": -0.21744,
-            "direction": "Towards Wimbledon"
+            "lon": -0.21744
           }
         ]
       },
@@ -2006,14 +1996,17 @@ const PAGES = [
           {
             "seq": 1,
             "stop_id": "490006705B2",
-            "name": "Fairfield Bus Station",
-            "direction": "Towards Wimbledon"
+            "name": "Fairfield Bus Station"
           },
           {
             "seq": 2,
+            "stop_id": "490015472D",
+            "name": "Wimbledon Station"
+          },
+          {
+            "seq": 3,
             "stop_id": "490005961E",
-            "name": "Darlaston Road",
-            "direction": "Away from Wimbledon"
+            "name": "Darlaston Road"
           }
         ],
         "stops": [
@@ -2022,16 +2015,21 @@ const PAGES = [
             "stop_id": "490006705B2",
             "name": "Fairfield Bus Station",
             "lat": 51.41044,
-            "lon": -0.29974,
-            "direction": "Towards Wimbledon"
+            "lon": -0.29974
           },
           {
             "seq": 2,
+            "stop_id": "490015472D",
+            "name": "Wimbledon Station",
+            "lat": 51.42066,
+            "lon": -0.20543
+          },
+          {
+            "seq": 3,
             "stop_id": "490005961E",
             "name": "Darlaston Road",
             "lat": 51.4163,
-            "lon": -0.21744,
-            "direction": "Away from Wimbledon"
+            "lon": -0.21744
           }
         ]
       },
@@ -2044,32 +2042,27 @@ const PAGES = [
           {
             "seq": 1,
             "stop_id": "490000216C",
-            "name": "South Wimbledon Station",
-            "direction": "Towards Wimbledon"
+            "name": "South Wimbledon Station"
           },
           {
             "seq": 2,
             "stop_id": "490014742Y",
-            "name": "Wimbledon Theatre",
-            "direction": "Towards Wimbledon"
+            "name": "Wimbledon Theatre"
           },
           {
             "seq": 3,
             "stop_id": "490015472L",
-            "name": "Wimbledon Station",
-            "direction": "Towards Kingston & Putney"
+            "name": "Wimbledon Station"
           },
           {
             "seq": 4,
             "stop_id": "490006987M",
-            "name": "Francis Grove",
-            "direction": "Towards Wimbledon"
+            "name": "Francis Grove"
           },
           {
             "seq": 5,
             "stop_id": "490005961W",
-            "name": "Darlaston Road",
-            "direction": "Towards Wimbledon"
+            "name": "Darlaston Road"
           }
         ],
         "stops": [
@@ -2078,40 +2071,35 @@ const PAGES = [
             "stop_id": "490000216C",
             "name": "South Wimbledon Station",
             "lat": 51.41556,
-            "lon": -0.19148,
-            "direction": "Towards Wimbledon"
+            "lon": -0.19148
           },
           {
             "seq": 2,
             "stop_id": "490014742Y",
             "name": "Wimbledon Theatre",
             "lat": 51.4192,
-            "lon": -0.19979,
-            "direction": "Towards Wimbledon"
+            "lon": -0.19979
           },
           {
             "seq": 3,
             "stop_id": "490015472L",
             "name": "Wimbledon Station",
             "lat": 51.42029,
-            "lon": -0.20659,
-            "direction": "Towards Kingston & Putney"
+            "lon": -0.20659
           },
           {
             "seq": 4,
             "stop_id": "490006987M",
             "name": "Francis Grove",
             "lat": 51.42118,
-            "lon": -0.20945,
-            "direction": "Towards Wimbledon"
+            "lon": -0.20945
           },
           {
             "seq": 5,
             "stop_id": "490005961W",
             "name": "Darlaston Road",
             "lat": 51.4163,
-            "lon": -0.21744,
-            "direction": "Towards Wimbledon"
+            "lon": -0.21744
           }
         ]
       },
@@ -2124,14 +2112,17 @@ const PAGES = [
           {
             "seq": 1,
             "stop_id": "490006705B2",
-            "name": "Fairfield Bus Station",
-            "direction": "Towards Wimbledon"
+            "name": "Fairfield Bus Station"
           },
           {
             "seq": 2,
+            "stop_id": "490015472D",
+            "name": "Wimbledon Station"
+          },
+          {
+            "seq": 3,
             "stop_id": "490005961E",
-            "name": "Darlaston Road",
-            "direction": "Away from Wimbledon"
+            "name": "Darlaston Road"
           }
         ],
         "stops": [
@@ -2140,16 +2131,21 @@ const PAGES = [
             "stop_id": "490006705B2",
             "name": "Fairfield Bus Station",
             "lat": 51.41044,
-            "lon": -0.29974,
-            "direction": "Towards Wimbledon"
+            "lon": -0.29974
           },
           {
             "seq": 2,
+            "stop_id": "490015472D",
+            "name": "Wimbledon Station",
+            "lat": 51.42066,
+            "lon": -0.20543
+          },
+          {
+            "seq": 3,
             "stop_id": "490005961E",
             "name": "Darlaston Road",
             "lat": 51.4163,
-            "lon": -0.21744,
-            "direction": "Away from Wimbledon"
+            "lon": -0.21744
           }
         ]
       },
@@ -2162,20 +2158,17 @@ const PAGES = [
           {
             "seq": 1,
             "stop_id": "490008184E",
-            "name": "Wimbledon Village",
-            "direction": "Away from Wimbledon"
+            "name": "Wimbledon Village"
           },
           {
             "seq": 2,
             "stop_id": "490014734S",
-            "name": "Wimbledon Hill Road",
-            "direction": "Away from Wimbledon"
+            "name": "Wimbledon Hill Road"
           },
           {
             "seq": 3,
             "stop_id": "490015472D",
-            "name": "Wimbledon Station",
-            "direction": "Towards Tooting & North Cheam"
+            "name": "Wimbledon Station"
           }
         ],
         "stops": [
@@ -2184,24 +2177,21 @@ const PAGES = [
             "stop_id": "490008184E",
             "name": "Wimbledon Village",
             "lat": 51.42479,
-            "lon": -0.21666,
-            "direction": "Away from Wimbledon"
+            "lon": -0.21666
           },
           {
             "seq": 2,
             "stop_id": "490014734S",
             "name": "Wimbledon Hill Road",
             "lat": 51.421505,
-            "lon": -0.206444,
-            "direction": "Away from Wimbledon"
+            "lon": -0.206444
           },
           {
             "seq": 3,
             "stop_id": "490015472D",
             "name": "Wimbledon Station",
             "lat": 51.42066,
-            "lon": -0.20543,
-            "direction": "Towards Tooting & North Cheam"
+            "lon": -0.20543
           }
         ]
       },
@@ -2214,20 +2204,22 @@ const PAGES = [
           {
             "seq": 1,
             "stop_id": "490002060A",
-            "name": "Morden Road Tram Stop",
-            "direction": "Towards Wimbledon"
+            "name": "Morden Road Tram Stop"
           },
           {
             "seq": 2,
             "stop_id": "490015174A",
-            "name": "Morden Road / South Wimbledon Station",
-            "direction": "Towards Wimbledon"
+            "name": "Morden Road / South Wimbledon Station"
           },
           {
             "seq": 3,
             "stop_id": "490014734R",
-            "name": "Wimbledon Hill Road",
-            "direction": "Towards Wimbledon"
+            "name": "Wimbledon Hill Road"
+          },
+          {
+            "seq": 4,
+            "stop_id": "490015472L",
+            "name": "Wimbledon Station"
           }
         ],
         "stops": [
@@ -2236,24 +2228,28 @@ const PAGES = [
             "stop_id": "490002060A",
             "name": "Morden Road Tram Stop",
             "lat": 51.40941,
-            "lon": -0.1925,
-            "direction": "Towards Wimbledon"
+            "lon": -0.1925
           },
           {
             "seq": 2,
             "stop_id": "490015174A",
             "name": "Morden Road / South Wimbledon Station",
             "lat": 51.41485,
-            "lon": -0.19281,
-            "direction": "Towards Wimbledon"
+            "lon": -0.19281
           },
           {
             "seq": 3,
             "stop_id": "490014734R",
             "name": "Wimbledon Hill Road",
             "lat": 51.421505,
-            "lon": -0.206444,
-            "direction": "Towards Wimbledon"
+            "lon": -0.206444
+          },
+          {
+            "seq": 4,
+            "stop_id": "490015472L",
+            "name": "Wimbledon Station",
+            "lat": 51.42029,
+            "lon": -0.20659
           }
         ]
       }
