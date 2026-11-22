@@ -303,9 +303,10 @@ arriving soonest and labels it with that group's destination.
 - The London page groups arrivals by **physical stop** (pole), with a
   **“towards” summary of the ultimate destinations** served there — so 57 and
   131 share one group where they call at the same pole, and the summary lists
-  both destinations. **Darlaston Road** is always first; the other stops are
-  ordered by distance from you (nearest first). Location off falls back to
-  Darlaston Road, Wimbledon Station, Francis Grove, then the rest.
+  both destinations. **Darlaston Road towards Clapham Park & Tooting
+  Broadway** is first, then Darlaston Road towards Kingston; the other stops
+  are ordered by distance from you (nearest first). Location off falls back
+  to Darlaston Road, Wimbledon Station, Francis Grove, then the rest.
 - Hong Kong bus clock times are shown in Hong Kong time
   (`Asia/Hong_Kong`), so they stay correct when travelling.
 - The **Taikoo ↔ New Trend** page shows next departures and arrivals at

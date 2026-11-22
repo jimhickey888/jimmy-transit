@@ -12,8 +12,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.10.0';
-const APP_BUILD = '22 Nov 2026, 16:03 HKT';
+const APP_VERSION = '2.10.1';
+const APP_BUILD = '22 Nov 2026, 16:08 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -889,13 +889,18 @@ function stopGroups(page) {
       group.label = destinations.length ? `towards ${joinDestinations(destinations)}` : '';
     }
 
-    /* Darlaston Road stays pinned first; everything else is nearest first. */
+    /* Darlaston Road stays pinned first, with the Clapham Park / Tooting
+       pole above the Kingston pole; everything else is nearest first. */
     const rank = page.stopOrder
       ? new Map(page.stopOrder.map((name, i) => [name, i]))
       : null;
+    const pin = (group) => {
+      if (group.name !== 'Darlaston Road') return 2;
+      return /clapham park/i.test(group.label) ? 0 : 1;
+    };
     sorted.sort((a, b) => {
-      const pinA = a.name === 'Darlaston Road' ? 0 : 1;
-      const pinB = b.name === 'Darlaston Road' ? 0 : 1;
+      const pinA = pin(a);
+      const pinB = pin(b);
       if (pinA !== pinB) return pinA - pinB;
 
       if (state.lastPos) {
