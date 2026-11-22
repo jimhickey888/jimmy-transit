@@ -1,7 +1,8 @@
 # Jimmy Transit push worker
 
-Sends **Web Push notifications at 10, 8, 6, 4, 2 and 0 minutes before a
-tracked bus is due** — one alert record per milestone, fired by the cron.
+Sends **Web Push notifications labelled 10, 8, 6, 4, 2 and 0 minutes**, each
+one minute earlier than its label (so 11, 9, 7, 5, 3 and 1 minutes before the
+bus) — one alert record per milestone, fired by the cron.
 It is a single Cloudflare Worker (free plan is enough) with a KV namespace
 and a one-minute cron trigger. The app itself stays static on GitHub Pages.
 
@@ -89,9 +90,11 @@ signature. All checks should pass.
 
 Notes and limits:
 
-- Milestones already in the past are skipped, so tracking a bus 7 minutes
-  out arms 6, 4, 2 and 0. Under two minutes the chip says **Under 2 min
-  away** and nothing is scheduled.
+- Milestones already in the past when you arm are skipped, so tracking a bus
+  7 minutes out arms 6, 4, 2 and 0. If the prediction later moves earlier and
+  a milestone is missed, the app re-schedules it to fire immediately instead
+  of skipping it. When nothing can be scheduled the chip says **Too close
+  for alerts**.
 - iOS delivery is best effort. Low Power Mode, Focus and notification
   summaries can delay or group a notification; the worker cannot guarantee
   a minute-accurate delivery.

@@ -12,8 +12,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.7.1';
-const APP_BUILD = '22 Nov 2026, 03:56 HKT';
+const APP_VERSION = '2.8.0';
+const APP_BUILD = '22 Nov 2026, 15:35 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -1100,10 +1100,13 @@ function infoHtml() {
     <section class="info-block">
       <h2>Alerts</h2>
       <p class="info-note">
-        With push set up, the alert chip schedules notifications at 10, 8, 6,
-        4, 2 and 0 minutes before departure. In the app the same milestones
-        beep and flash the countdown. iOS only allows web push for apps added
-        to the Home Screen, and delivery is best effort.
+        With push set up, the alert chip schedules notifications labelled 10,
+        8, 6, 4, 2 and 0 minutes, each sent a minute before its label (11, 9,
+        7, 5, 3 and 1 minutes before departure). If an updated arrival time
+        passes a milestone, it fires immediately instead of being skipped. In
+        the app the milestones beep and flash the countdown. iOS only allows
+        web push for apps added to the Home Screen, and delivery is best
+        effort.
       </p>
     </section>
     <p class="info-note">
@@ -1329,11 +1332,20 @@ async function rescheduleAlert() {
   } catch { /* keep the old schedule */ }
 }
 
+/* Every milestone fires one minute early, so the "10 min" alert lands at
+   11 minutes before the arrival and "due" lands one minute before. */
+const ALERT_LEAD_MS = 60000;
+
+function alertSteps(targetMs) {
+  return ALERT_MINUTES.map((minutes) => ({
+    minutes,
+    fireAt: targetMs - (minutes + 1) * ALERT_LEAD_MS,
+  }));
+}
+
 function alertPlan(targetMs) {
   const now = Date.now();
-  return ALERT_MINUTES
-    .map((minutes) => ({ minutes, fireAt: targetMs - minutes * 60000 }))
-    .filter((step) => step.fireAt > now + 20000);
+  return alertSteps(targetMs).filter((step) => step.fireAt > now + 20000);
 }
 
 /* Marks already in the past when tracking starts must not beep. */
@@ -1646,7 +1658,7 @@ async function armAlert() {
 
   const plan = alertPlan(t.targetMs);
   if (!plan.length) {
-    flashChip('Under 2 min away');
+    flashChip('Too close for alerts');
     return;
   }
 
@@ -1685,12 +1697,35 @@ async function scheduleAlert(sub) {
   const t = state.tracked;
   if (!t) return;
 
-  const plan = alertPlan(t.targetMs);
+  const now = Date.now();
+  const previous = t.alert && t.alert.active && t.alert.fires ? t.alert.fires : null;
+  const steps = [];
+
+  for (const step of alertSteps(t.targetMs)) {
+    if (step.fireAt > now + 20000) {
+      steps.push(step);
+      continue;
+    }
+    const previousFire = previous ? previous[step.minutes] : undefined;
+    /* The arrival moved earlier and passed a milestone that was still ahead
+       at the last schedule: send it now instead of skipping it. */
+    if (previous && previousFire !== undefined && previousFire > now) {
+      steps.push({ ...step, fireAt: now + 15000, catchUp: true });
+    }
+  }
+
+  if (!steps.length) {
+    t.alert = null;
+    saveTracked();
+    renderTracked();
+    return;
+  }
+
   const group = (t.alert && t.alert.group)
     || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const subscription = sub && sub.toJSON ? sub.toJSON() : sub;
   const body = alertBody(t);
-  const alerts = plan.map((step) => {
+  const alerts = steps.map((step) => {
     const id = `${group}-${step.minutes}`;
     return {
       id,
@@ -1733,14 +1768,10 @@ async function scheduleAlert(sub) {
     throw error;
   }
 
-  /* Drop milestones that no longer exist after the prediction moved. */
-  if (t.alert && Array.isArray(t.alert.ids)) {
-    for (const old of t.alert.ids) {
-      if (!ids.includes(old)) cancelAlert(old);
-    }
-  }
+  const fires = {};
+  for (const step of steps) fires[step.minutes] = step.fireAt;
 
-  t.alert = { group, ids, minutes: plan.map((step) => step.minutes), active: true };
+  t.alert = { group, ids, minutes: steps.map((step) => step.minutes), fires, active: true };
   saveTracked();
   renderTracked();
 }
