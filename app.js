@@ -12,15 +12,23 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.10.5';
-const APP_BUILD = '23 Nov 2026, 23:49 HKT';
+const APP_VERSION = '2.10.6';
+const APP_BUILD = '23 Nov 2026, 23:53 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
 const PUSH_ENDPOINT = 'https://jimmy-transit-push.jimhickey.workers.dev';
 const PUSH_VAPID_KEY = 'BCPXl_A_ZsChEqNNcVJgMpjKCvKXUlpFE1-TQlxoPgYxLOUDX09V49xnJ4U6DKK1BS80-upzWIAB3aOBNeyC2DM';
 /* Alerts are scheduled at these minutes before departure (0 = due). */
-const ALERT_MINUTES = [10, 8, 6, 4, 2, 0];
+const ALERT_STEPS = [
+  { key: '10', lead: 12, title: (code) => `${code} in 10 min` },
+  { key: '8', lead: 10, title: (code) => `${code} in 8 min` },
+  { key: '6', lead: 8, title: (code) => `${code} in 6 min` },
+  { key: '4', lead: 6, title: (code) => `${code} in 4 min` },
+  { key: '2', lead: 4, title: (code) => `${code} in 2 min` },
+  { key: 'arriving', lead: 2, title: (code) => `${code} arriving` },
+  { key: '0', lead: 0, title: (code) => `${code} departing` },
+];
 /* In-app beeps happen at the same points, in seconds before departure. */
 const IN_APP_MARKS = [600, 480, 360, 240, 120, 0];
 
@@ -1159,13 +1167,13 @@ function infoHtml() {
       <h2>Alerts</h2>
       <p class="info-note">
         With push set up, the alert chip schedules notifications labelled 10,
-        8, 6, 4, 2 and 0 minutes. The 10-4 alerts fire two minutes early
-        (12, 10, 8 and 6 minutes before departure); “2 min” is titled
-        “arriving” and fires two minutes before; “departing” fires at the
-        predicted arrival time. If an updated arrival time passes a
-        milestone, it fires immediately instead of being skipped. In the app
-        the milestones beep and flash the countdown. iOS only allows web push
-        for apps added to the Home Screen, and delivery is best effort.
+        with push, notifications are scheduled for 10, 8, 6, 4 and 2 minutes
+        (each two minutes early), plus “arriving” at two minutes before and
+        “departing” at the predicted arrival time. If an updated arrival time
+        passes a milestone, it fires immediately instead of being skipped. In
+        the app the milestones beep and flash the countdown. iOS only allows
+        web push for apps added to the Home Screen, and delivery is best
+        effort.
       </p>
     </section>
     <p class="info-note">
@@ -1391,18 +1399,13 @@ async function rescheduleAlert() {
   } catch { /* keep the old schedule */ }
 }
 
-/* Labels 10-4 fire two minutes early. "arriving" fires two minutes before
-   the arrival and "departing" at the predicted arrival time itself. */
-const ALERT_LEAD_MIN = 2;
-
 function alertSteps(targetMs) {
-  return ALERT_MINUTES.map((minutes) => {
-    let fireAt;
-    if (minutes === 0) fireAt = targetMs;
-    else if (minutes === 2) fireAt = targetMs - 2 * 60000;
-    else fireAt = targetMs - (minutes + ALERT_LEAD_MIN) * 60000;
-    return { minutes, fireAt };
-  });
+  return ALERT_STEPS.map((step) => ({
+    key: step.key,
+    lead: step.lead,
+    title: step.title,
+    fireAt: targetMs - step.lead * 60000,
+  }));
 }
 
 function alertPlan(targetMs) {
@@ -1768,7 +1771,7 @@ async function scheduleAlert(sub) {
       steps.push(step);
       continue;
     }
-    const previousFire = previous ? previous[step.minutes] : undefined;
+    const previousFire = previous ? previous[step.key] : undefined;
     /* The arrival moved earlier and passed a milestone that was still ahead
        at the last schedule: send it now instead of skipping it. */
     if (previous && previousFire !== undefined && previousFire > now) {
@@ -1787,7 +1790,7 @@ async function scheduleAlert(sub) {
      costing six alert writes plus a subscription write per launch. */
   const unchanged = previous
     && steps.length === Object.keys(previous).length
-    && steps.every((step) => Number(previous[step.minutes]) === Number(step.fireAt));
+    && steps.every((step) => Number(previous[step.key]) === Number(step.fireAt));
   if (unchanged && Date.now() - (t.alert.postedAt || 0) < 6 * 60 * 60 * 1000) {
     return;
   }
@@ -1797,16 +1800,12 @@ async function scheduleAlert(sub) {
   const subscription = sub && sub.toJSON ? sub.toJSON() : sub;
   const body = alertBody(t);
   const alerts = steps.map((step) => {
-    const id = `${group}-${step.minutes}`;
+    const id = `${group}-${step.key}`;
     return {
       id,
       fireAt: step.fireAt,
-      leadMinutes: step.minutes,
-      title: step.minutes === 0
-        ? `${t.routeCode} departing`
-        : step.minutes === 2
-          ? `${t.routeCode} arriving`
-          : `${t.routeCode} in ${step.minutes} min`,
+      leadMinutes: step.lead,
+      title: step.title(t.routeCode),
       body,
       tag: id,
     };
@@ -1842,12 +1841,12 @@ async function scheduleAlert(sub) {
   }
 
   const fires = {};
-  for (const step of steps) fires[step.minutes] = step.fireAt;
+  for (const step of steps) fires[step.key] = step.fireAt;
 
   t.alert = {
     group,
     ids,
-    minutes: steps.map((step) => step.minutes),
+    minutes: steps.map((step) => step.key),
     fires,
     active: true,
     postedAt: Date.now(),
