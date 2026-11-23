@@ -1,8 +1,9 @@
 # Jimmy Transit push worker
 
-Sends **Web Push notifications labelled 10, 8, 6, 4, 2 and 0 minutes**, each
-two minutes earlier than its label (so 12, 10, 8, 6, 4 and 2 minutes before
-the bus; the final alert says “departing”) — one alert record per milestone.
+Sends **Web Push notifications labelled 10, 8, 6, 4, 2 and 0 minutes**. The
+10-2 alerts fire two minutes early (12, 10, 8, 6 and 4 minutes before the
+bus); “2 min” is titled **arriving**, and the final **departing** alert fires
+at the predicted arrival time.
 It is a single Cloudflare Worker (free plan is enough) with a KV namespace
 and a one-minute cron trigger. The app itself stays static on GitHub Pages.
 
