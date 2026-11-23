@@ -12,8 +12,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.10.4';
-const APP_BUILD = '23 Nov 2026, 23:45 HKT';
+const APP_VERSION = '2.10.5';
+const APP_BUILD = '23 Nov 2026, 23:49 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -1159,13 +1159,13 @@ function infoHtml() {
       <h2>Alerts</h2>
       <p class="info-note">
         With push set up, the alert chip schedules notifications labelled 10,
-        8, 6, 4, 2 and 0 minutes. The 10-2 alerts fire two minutes early
-        (12, 10, 8, 6 and 4 minutes before departure); “2 min” is titled
-        “arriving”. The final “departing” alert fires at the predicted arrival
-        time. If an updated arrival time passes a milestone, it fires
-        immediately instead of being skipped. In the app the milestones beep
-        and flash the countdown. iOS only allows web push for apps added to
-        the Home Screen, and delivery is best effort.
+        8, 6, 4, 2 and 0 minutes. The 10-4 alerts fire two minutes early
+        (12, 10, 8 and 6 minutes before departure); “2 min” is titled
+        “arriving” and fires two minutes before; “departing” fires at the
+        predicted arrival time. If an updated arrival time passes a
+        milestone, it fires immediately instead of being skipped. In the app
+        the milestones beep and flash the countdown. iOS only allows web push
+        for apps added to the Home Screen, and delivery is best effort.
       </p>
     </section>
     <p class="info-note">
@@ -1391,18 +1391,18 @@ async function rescheduleAlert() {
   } catch { /* keep the old schedule */ }
 }
 
-/* Labels 10-2 fire two minutes early; the 2-minute label is titled
-   "arriving". The final alert ("departing") is pinned to the predicted
-   arrival time itself. */
+/* Labels 10-4 fire two minutes early. "arriving" fires two minutes before
+   the arrival and "departing" at the predicted arrival time itself. */
 const ALERT_LEAD_MIN = 2;
 
 function alertSteps(targetMs) {
-  return ALERT_MINUTES.map((minutes) => ({
-    minutes,
-    fireAt: minutes === 0
-      ? targetMs
-      : targetMs - (minutes + ALERT_LEAD_MIN) * 60000,
-  }));
+  return ALERT_MINUTES.map((minutes) => {
+    let fireAt;
+    if (minutes === 0) fireAt = targetMs;
+    else if (minutes === 2) fireAt = targetMs - 2 * 60000;
+    else fireAt = targetMs - (minutes + ALERT_LEAD_MIN) * 60000;
+    return { minutes, fireAt };
+  });
 }
 
 function alertPlan(targetMs) {
