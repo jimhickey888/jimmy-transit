@@ -62,9 +62,8 @@ Court”, not “Hangking”).
 
 **Settings** — a **Push notification buffer** control: **Adaptive** (default),
 **2 min**, **1 min** or **Off**. Adaptive uses two minutes off-peak and one
-minute during weekday commute hours (Hong Kong 07:00–09:30 and 17:00–19:30;
-London 07:00–10:00 and 16:00–19:00, in each city’s time; weekends are
-off-peak). The labelled 10–2 alerts and “arriving” move with the buffer;
+minute on weekdays between **07:00 and 20:00**, in each city’s time; weekends
+are off-peak. The labelled 10–2 alerts and “arriving” move with the buffer;
 “departing” stays at arrival, or one minute after when off. In-app
 countdown/beeps are unaffected.
 
@@ -119,7 +118,7 @@ poles serve more than one direction.
   10 → 0 min** chip: Web Push notifications for 10, 8, 6, 4, 2, **arriving**
   and **departing**. The lead comes from **Settings → Push notification
   buffer**: **Adaptive** (default), **2 min**, **1 min** or **Off**. Adaptive
-  is two minutes off-peak and one minute during weekday commute hours in the
+  is two minutes off-peak and one minute on weekdays 07:00–20:00 in the
   arrival’s city. Labelled alerts and “arriving” move with it; “departing” is
   at arrival, or one minute after when off. If a live ETA update passes a milestone, it is sent immediately
   instead of skipped. In-app beeps stay at the labels. See

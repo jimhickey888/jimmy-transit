@@ -12,8 +12,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.12.0';
-const APP_BUILD = '24 Nov 2026, 01:17 HKT';
+const APP_VERSION = '2.12.1';
+const APP_BUILD = '24 Nov 2026, 01:23 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -1146,10 +1146,8 @@ function callsHtml() {
 
 function pushBufferText(setting) {
   if (setting === 'adaptive') {
-    return 'Adaptive uses two minutes off-peak and one minute during weekday '
-      + 'commute hours (Hong Kong 07:00–09:30 and 17:00–19:30; London '
-      + '07:00–10:00 and 16:00–19:00, in each city’s time). Weekends are '
-      + 'off-peak.';
+    return 'Adaptive uses two minutes off-peak and one minute on weekdays '
+      + 'between 07:00 and 20:00, in each city’s time. Weekends are off-peak.';
   }
   if (setting === 2) {
     return 'Alerts fire two minutes before their labelled time (“arriving” two minutes before the bus, “departing” at arrival).';
@@ -1245,9 +1243,8 @@ function infoHtml() {
         With push set up, the alert chip schedules the milestones 10, 8, 6, 4,
         2, arriving and departing, using the buffer chosen in Settings:
         Adaptive (default), two minutes, one minute, or off. Adaptive uses two
-        minutes off-peak and one minute during weekday commute hours (Hong
-        Kong 07:00–09:30 and 17:00–19:30; London 07:00–10:00 and 16:00–19:00,
-        in each city’s time; weekends are off-peak). The labelled alerts and
+        minutes off-peak and one minute on weekdays between 07:00 and 20:00,
+        in each city’s time; weekends are off-peak. The labelled alerts and
         “arriving” move with the buffer; “departing” stays at the predicted
         arrival time, or one minute after when the buffer is off. If an
         updated arrival time passes a milestone, it fires immediately instead
@@ -1516,17 +1513,14 @@ function localClock(ms, timeZone) {
   }
 }
 
-/* Weekday commute windows in the arrival's service timezone. */
-const PEAK_WINDOWS = {
-  hk: [[7 * 60, 9 * 60 + 30], [17 * 60, 19 * 60 + 30]],
-  london: [[7 * 60, 10 * 60], [16 * 60, 19 * 60]],
-};
+/* Peak is weekdays 07:00-20:00 in the arrival's service timezone. */
+const PEAK_START_MIN = 7 * 60;
+const PEAK_END_MIN = 20 * 60;
 
 function isPeakArrival(ms, timeZone) {
   const clock = localClock(ms, timeZone);
   if (!clock || clock.weekday === 'Sat' || clock.weekday === 'Sun') return false;
-  const windows = timeZone === LONDON_TZ ? PEAK_WINDOWS.london : PEAK_WINDOWS.hk;
-  return windows.some(([start, end]) => clock.minutes >= start && clock.minutes < end);
+  return clock.minutes >= PEAK_START_MIN && clock.minutes < PEAK_END_MIN;
 }
 
 function effectiveBuffer(t = state.tracked) {

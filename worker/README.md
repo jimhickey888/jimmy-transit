@@ -3,7 +3,7 @@
 Sends **Web Push notifications** for the 10/8/6/4/2 milestones, an
 **arriving** alert and a **departing** alert. The app’s **Settings → Push
 notification buffer** decides the lead: **Adaptive** (default: two minutes
-off-peak, one minute during weekday commute hours in the arrival’s city),
+off-peak, one minute on weekdays 07:00–20:00 in the arrival’s city),
 **2 min**, **1 min** or **Off** (arriving at arrival, departing one minute
 after). The client computes the fire times.
 
