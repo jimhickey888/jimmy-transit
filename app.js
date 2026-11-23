@@ -12,8 +12,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.10.1';
-const APP_BUILD = '22 Nov 2026, 16:08 HKT';
+const APP_VERSION = '2.10.2';
+const APP_BUILD = '23 Nov 2026, 22:52 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -1779,6 +1779,15 @@ async function scheduleAlert(sub) {
     return;
   }
 
+  /* Re-opening the app should not rewrite an unchanged schedule; that was
+     costing six alert writes plus a subscription write per launch. */
+  const unchanged = previous
+    && steps.length === Object.keys(previous).length
+    && steps.every((step) => Number(previous[step.minutes]) === Number(step.fireAt));
+  if (unchanged && Date.now() - (t.alert.postedAt || 0) < 6 * 60 * 60 * 1000) {
+    return;
+  }
+
   const group = (t.alert && t.alert.group)
     || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const subscription = sub && sub.toJSON ? sub.toJSON() : sub;
@@ -1829,7 +1838,14 @@ async function scheduleAlert(sub) {
   const fires = {};
   for (const step of steps) fires[step.minutes] = step.fireAt;
 
-  t.alert = { group, ids, minutes: steps.map((step) => step.minutes), fires, active: true };
+  t.alert = {
+    group,
+    ids,
+    minutes: steps.map((step) => step.minutes),
+    fires,
+    active: true,
+    postedAt: Date.now(),
+  };
   saveTracked();
   renderTracked();
 }

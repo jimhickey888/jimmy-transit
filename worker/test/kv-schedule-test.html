@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>KV schedule test</title>
+<style>
+  body { font: 14px/1.5 ui-monospace, Menlo, monospace; padding: 20px; }
+  .pass { color: #0b7a45; }
+  .fail { color: #c00; font-weight: 700; }
+</style>
+</head>
+<body>
+<h1>KV scheduling test</h1>
+<p>Serve the repo with <code>python3 -m http.server 8000</code> and open
+<code>/worker/test/kv-schedule-test.html</code>. It exercises
+<code>sendDueAlerts</code> against a fake KV namespace and counts list
+operations, proving the cron skips while nothing is due.</p>
+<pre id="out">running…</pre>
+
+<script type="module">
+import { sendDueAlerts } from '../worker.js';
+
+const out = document.getElementById('out');
+const lines = [];
+let failures = 0;
+
+function check(name, ok, detail = '') {
+  if (!ok) failures += 1;
+  lines.push(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
+  out.innerHTML = lines.map((line) => (
+    line.startsWith('PASS') ? `<span class="pass">${line}</span>`
+      : line.startsWith('FAIL') ? `<span class="fail">${line}</span>` : line
+  )).join('\n');
+}
+
+function b64url(bytes) {
+  let binary = '';
+  for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+class FakeKV {
+  constructor() {
+    this.map = new Map();
+    this.ops = { get: 0, put: 0, delete: 0, list: 0 };
+  }
+
+  async get(key, type) {
+    this.ops.get += 1;
+    const value = this.map.get(key);
+    if (value === undefined) return null;
+    return type === 'json' ? JSON.parse(value) : value;
+  }
+
+  async put(key, value) {
+    this.ops.put += 1;
+    this.map.set(key, String(value));
+  }
+
+  async delete(key) {
+    this.ops.delete += 1;
+    this.map.delete(key);
+  }
+
+  async list({ prefix = '' } = {}) {
+    this.ops.list += 1;
+    const keys = [...this.map.keys()]
+      .filter((key) => key.startsWith(prefix))
+      .map((name) => ({ name }));
+    return { keys, list_complete: true };
+  }
+}
+
+async function main() {
+  const kv = new FakeKV();
+
+  const signing = await crypto.subtle.generateKey(
+    { name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign'],
+  );
+  const jwk = await crypto.subtle.exportKey('jwk', signing.privateKey);
+  const vapidPublic = new Uint8Array(await crypto.subtle.exportKey('raw', signing.publicKey));
+
+  const ua = await crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'],
+  );
+  const uaPublic = new Uint8Array(await crypto.subtle.exportKey('raw', ua.publicKey));
+  const subscription = {
+    endpoint: 'https://example.test/push',
+    keys: {
+      p256dh: b64url(uaPublic),
+      auth: b64url(crypto.getRandomValues(new Uint8Array(16))),
+    },
+  };
+
+  const env = {
+    ALERTS: kv,
+    VAPID_PRIVATE_JWK: JSON.stringify(jwk),
+    VAPID_PUBLIC_KEY: b64url(vapidPublic),
+    VAPID_SUBJECT: 'mailto:test@example.com',
+  };
+
+  const realFetch = window.fetch;
+  let pushCalls = 0;
+  window.fetch = async (url, options) => {
+    if (String(url).startsWith('https://example.test/push')) {
+      pushCalls += 1;
+      return new Response('', { status: 201 });
+    }
+    return realFetch(url, options);
+  };
+
+  // 1. Empty namespace: one scan, then an idle pointer.
+  const empty = await sendDueAlerts(env);
+  check('empty cron scans once', kv.ops.list === 1, `lists=${kv.ops.list}`);
+  check('empty cron sends nothing', empty.sent === 0 && empty.failed === 0);
+
+  // 2. A second cron run must not list while the pointer is in the future.
+  const skippedRun = await sendDueAlerts(env);
+  check('idle cron skips the scan', skippedRun.skipped === true);
+  check('idle cron adds no list ops', kv.ops.list === 1, `lists=${kv.ops.list}`);
+
+  // 3. A due alert is sent and removed.
+  const now = Date.now();
+  kv.map.set('sub:test', JSON.stringify(subscription));
+  kv.map.set('alert:test-1', JSON.stringify({
+    subId: 'test', fireAt: now - 1000, title: '85 in 2 min',
+    body: 'Healthy Village', tag: 't1', attempts: 0,
+  }));
+  kv.map.set('meta:next', JSON.stringify({ at: now - 500 }));
+
+  const dueRun = await sendDueAlerts(env);
+  check('due alert sends once', dueRun.sent === 1 && pushCalls === 1, `sent=${dueRun.sent} pushes=${pushCalls}`);
+  check('due alert is deleted', !kv.map.has('alert:test-1'));
+  check('pointer moves into the future', JSON.parse(kv.map.get('meta:next')).at > Date.now());
+
+  // 4. A future alert keeps the pointer at its time and avoids repeat scans.
+  kv.map.set('alert:future', JSON.stringify({
+    subId: 'test', fireAt: now + 60000, title: '85 in 4 min',
+    body: 'x', tag: 't2', attempts: 0,
+  }));
+  kv.map.set('meta:next', JSON.stringify({ at: now - 1 }));
+  const listsBefore = kv.ops.list;
+  const futureRun = await sendDueAlerts(env);
+  check('future alert is not sent', futureRun.sent === 0);
+  check('scan sees the future alert', kv.ops.list === listsBefore + 1, `lists=${kv.ops.list}`);
+  const pointer = JSON.parse(kv.map.get('meta:next')).at;
+  check('pointer follows the future alert', Math.abs(pointer - (now + 60000)) < 2000, `at=${pointer}`);
+
+  const listsAfterFuture = kv.ops.list;
+  const idleAgain = await sendDueAlerts(env);
+  check('next idle run skips', idleAgain.skipped === true && kv.ops.list === listsAfterFuture);
+
+  lines.push('');
+  lines.push(failures ? `${failures} CHECK(S) FAILED` : 'ALL CHECKS PASSED');
+  out.innerHTML = lines.map((line) => {
+    if (line.startsWith('FAIL') || line.includes('FAILED')) return `<span class="fail">${line}</span>`;
+    if (line.startsWith('PASS')) return `<span class="pass">${line}</span>`;
+    return line;
+  }).join('\n');
+
+  window.fetch = realFetch;
+}
+
+main().catch((error) => {
+  check('test harness ran', false, error && error.message);
+  console.error(error);
+});
+</script>
+</body>
+</html>

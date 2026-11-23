@@ -78,6 +78,15 @@ It encrypts a payload the way the worker does, decrypts it with a fresh
 subscriber key, rejects a tampered ciphertext, and verifies the VAPID JWT
 signature. All checks should pass.
 
+## KV usage
+
+The cron reads the single `meta:next` pointer once a minute and only performs
+a KV `list` when something is actually due. This matters on the free plan:
+the old once-a-minute scan used 1,440 list operations a day against a
+1,000/day allowance. Normal days now use roughly 24 idle scans plus one scan
+per batch of due alerts; reads stay around 1,440/day (100,000 allowed).
+Do not change the cron back to listing every minute.
+
 ## 5. Using it on the phone
 
 1. The app must be on the Home Screen (iOS only allows web push there), and

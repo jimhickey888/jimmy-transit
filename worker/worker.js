@@ -20,6 +20,13 @@ const ALLOWED_ORIGINS = [
 
 const MAX_LEAD_MIN = 30;
 const MAX_ALERT_BATCH = 12;
+
+/* A pointer to the next time anything is due. The cron reads this one key per
+   minute and only scans (KV list) when the pointer says something is due.
+   Without it, a once-a-minute list would use 1,440 list ops/day against the
+   free tier's 1,000. */
+const NEXT_KEY = 'meta:next';
+const IDLE_NEXT_MS = 60 * 60 * 1000; // re-check hourly when nothing is queued
 const utf8 = new TextEncoder();
 
 /* ---------------- encoding helpers ---------------- */
@@ -241,6 +248,36 @@ async function storeAlert(env, subscription, alert) {
   return { subId, fireAt };
 }
 
+/* ---------------- scheduling pointer ---------------- */
+
+async function nextAlarm(env) {
+  try {
+    return await env.ALERTS.get(NEXT_KEY, 'json');
+  } catch {
+    return null;
+  }
+}
+
+async function setNextAlarm(env, at) {
+  const target = Number.isFinite(at) ? at : Date.now() + IDLE_NEXT_MS;
+  try {
+    await env.ALERTS.put(NEXT_KEY, JSON.stringify({ at: target }), {
+      expirationTtl: 60 * 60 * 48,
+    });
+  } catch {
+    /* the cron will fall back to a scan */
+  }
+}
+
+/* Move the pointer earlier when a new alert is scheduled. A lost race can only
+   delay the earlier alert until the idle re-check (one hour), never longer. */
+async function noteNext(env, fireAt) {
+  const current = await nextAlarm(env);
+  if (!current || Number(fireAt) < Number(current.at)) {
+    await setNextAlarm(env, Number(fireAt));
+  }
+}
+
 /* ---------------- cron ---------------- */
 
 async function retryOrDrop(env, keyName, record) {
@@ -254,9 +291,15 @@ async function retryOrDrop(env, keyName, record) {
 
 export async function sendDueAlerts(env) {
   const now = Date.now();
+  const next = await nextAlarm(env);
+  if (next && Number(next.at) > now) {
+    return { sent: 0, failed: 0, skipped: true };
+  }
+
   const vapid = vapidConfig(env);
   let sent = 0;
   let failed = 0;
+  let earliest = Infinity;
   let cursor;
 
   do {
@@ -264,7 +307,10 @@ export async function sendDueAlerts(env) {
     for (const key of listed.keys) {
       const record = await env.ALERTS.get(key.name, 'json');
       if (!record) continue;
-      if (record.fireAt > now) continue;
+      if (record.fireAt > now) {
+        earliest = Math.min(earliest, record.fireAt);
+        continue;
+      }
 
       if (now - record.fireAt > 15 * 60 * 1000) {
         await env.ALERTS.delete(key.name);
@@ -295,16 +341,20 @@ export async function sendDueAlerts(env) {
           await env.ALERTS.delete(key.name);
         } else {
           failed += 1;
+          earliest = Math.min(earliest, record.fireAt);
           await retryOrDrop(env, key.name, record);
         }
       } catch (error) {
         console.error('alert failed', key.name, error);
         failed += 1;
+        earliest = Math.min(earliest, record.fireAt);
         await retryOrDrop(env, key.name, record);
       }
     }
     cursor = listed.list_complete ? null : listed.cursor;
   } while (cursor);
+
+  await setNextAlarm(env, earliest === Infinity ? now + IDLE_NEXT_MS : earliest);
 
   return { sent, failed };
 }
@@ -341,6 +391,7 @@ export default {
       }
 
       const stored = await storeAlert(env, body.subscription, body.alert);
+      await noteNext(env, stored.fireAt);
       return json({ ok: true, ...stored }, 200, origin);
     }
 
@@ -366,6 +417,7 @@ export default {
       for (const alert of body.alerts) {
         fireAt.push(await storeOneAlert(env, subId, alert));
       }
+      await noteNext(env, Math.min(...fireAt));
       return json({ ok: true, subId, alerts: body.alerts.length, fireAt }, 200, origin);
     }
 
