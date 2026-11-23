@@ -87,25 +87,22 @@ the old once-a-minute scan used 1,440 list operations a day against a
 per batch of due alerts; reads stay around 1,440/day (100,000 allowed).
 Do not change the cron back to listing every minute.
 
-## Optional: Durable Object scheduler (second-level timing)
+## Durable Object scheduler (second-level timing)
 
-The cron trigger cannot run more often than once a minute. For precision, the
-worker can put the schedule in a Durable Object and set an **alarm** at the
-next fire time; the alarm sends within seconds and then schedules the next
-one. The minute cron remains as a watchdog and for recovery.
+The cron trigger cannot run more often than once a minute, so **this
+deployment uses a Durable Object**: alerts and subscriptions are stored in DO
+storage (strongly consistent — KV list lag previously delayed sends by up to
+a minute), and an **alarm** fires at the next `fireAt`, sends, and schedules
+the next one. No KV polling is involved in this mode.
 
-This needs the `SCHEDULER` Durable Object binding, which the Cloudflare
-dashboard does not reliably let you add to an existing Worker. Use Wrangler:
+`wrangler.toml` declares the `SCHEDULER` binding and the `v1` migration
+(`new_sqlite_classes`, free plan). Deploy from `worker/` with
+`npx wrangler deploy`; `/health` reports `"scheduler":"durable-object"`.
 
-```sh
-cd worker
-npx wrangler deploy
-```
-
-`wrangler.toml` already declares the binding and the `v1` migration
-(`new_sqlite_classes`, free plan). After deploying, `/health` reports
-`"scheduler":"durable-object"`; without the binding it still reports
-`"next-pointer"` and behaves exactly as before.
+The minute cron remains a watchdog: it calls the DO only if the alarm is
+missing or more than two minutes overdue. Without the binding the worker
+falls back to the KV + `meta:next` path and `/health` reports
+`"next-pointer"`.
 
 The client is unchanged. With the DO enabled, alerts can land within a few
 seconds of their scheduled time instead of within the minute, though iOS

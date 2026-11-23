@@ -370,51 +370,180 @@ export class AlertScheduler {
     this.env = env;
   }
 
+  json(body, status = 200) {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  async alerts() {
+    return (await this.state.storage.get('alerts')) || [];
+  }
+
+  async subs() {
+    return (await this.state.storage.get('subs')) || {};
+  }
+
   async fetch(request) {
     const url = new URL(request.url);
     try {
-      if (url.pathname === '/bump') {
-        const body = await request.json().catch(() => ({}));
-        await this.ensureAlarm(Number(body.at));
-      } else if (url.pathname === '/tick') {
-        await this.ensureAlarm();
-      } else {
-        return new Response('not found', { status: 404 });
+      if (url.pathname === '/alerts' && request.method === 'POST') {
+        return await this.schedule(await request.json());
+      }
+      if (url.pathname === '/alert' && request.method === 'DELETE') {
+        return await this.cancel(url.searchParams.get('id'));
+      }
+      if (url.pathname === '/alerts' && request.method === 'GET') {
+        const list = await this.alerts();
+        return this.json({ count: list.length });
+      }
+      if (url.pathname === '/run' && request.method === 'POST') {
+        return this.json(await this.runDue());
+      }
+      if (url.pathname === '/watchdog' && request.method === 'POST') {
+        const alarm = await this.state.storage.getAlarm();
+        if (!alarm || alarm <= Date.now() - 2 * 60 * 1000) {
+          return this.json(await this.runDue());
+        }
+        await this.arm(await this.alerts());
+        return this.json({ ok: true, skipped: true });
+      }
+      if (url.pathname === '/tick' && request.method === 'POST') {
+        await this.arm(await this.alerts());
+        return this.json({ ok: true });
+      }
+      if (url.pathname === '/status') {
+        const list = await this.alerts();
+        return this.json({ count: list.length, alarm: await this.state.storage.getAlarm() });
       }
     } catch (error) {
       console.error('scheduler fetch failed', error);
-      return new Response('error', { status: 500 });
+      return this.json({ error: String(error && error.message ? error.message : error) }, 500);
     }
-    return new Response('ok');
+    return this.json({ error: 'not found' }, 404);
   }
 
-  async ensureAlarm(preferred) {
-    const current = await this.state.storage.getAlarm();
-    const next = await nextAlarm(this.env);
-    const candidates = [preferred, next && Number(next.at)]
-      .filter((value) => Number.isFinite(value));
-    const target = candidates.length
-      ? Math.min(...candidates)
-      : Date.now() + 24 * 60 * 60 * 1000;
-    if (!current || target < current) {
-      await this.state.storage.setAlarm(target);
+  async schedule(body) {
+    const subId = String(body.subId || '');
+    const subscription = body.subscription;
+    const incoming = Array.isArray(body.alerts) ? body.alerts : [];
+    if (!subId || !subscription || !incoming.length) {
+      return this.json({ error: 'subId, subscription and alerts are required' }, 400);
     }
+
+    const subs = await this.subs();
+    subs[subId] = subscription;
+
+    const now = Date.now();
+    let list = await this.alerts();
+    const fireAt = [];
+
+    for (const alert of incoming) {
+      const at = Math.max(now + 15000, Math.min(Number(alert.fireAt), now + 24 * 60 * 60 * 1000));
+      fireAt.push(at);
+      const record = {
+        id: String(alert.id),
+        subId,
+        fireAt: at,
+        title: String(alert.title || 'Bus arriving soon').slice(0, 80),
+        body: String(alert.body || '').slice(0, 160),
+        tag: String(alert.tag || `bus-${alert.id}`).slice(0, 80),
+        createdAt: now,
+        attempts: 0,
+      };
+      list = list.filter((item) => item.id !== record.id);
+      list.push(record);
+    }
+
+    await this.state.storage.put('subs', subs);
+    await this.state.storage.put('alerts', list);
+    await this.arm(list);
+    return this.json({ ok: true, subId, alerts: incoming.length, fireAt });
+  }
+
+  async cancel(id) {
+    if (!id) return this.json({ error: 'id is required' }, 400);
+    const list = (await this.alerts()).filter((item) => item.id !== id);
+    await this.state.storage.put('alerts', list);
+    await this.arm(list);
+    return this.json({ ok: true });
+  }
+
+  async arm(list) {
+    const now = Date.now();
+    const next = list.reduce(
+      (min, item) => Math.min(min, Number(item.fireAt) || Infinity),
+      Infinity,
+    );
+    const at = Number.isFinite(next)
+      ? Math.max(next, now + 500)
+      : now + 24 * 60 * 60 * 1000;
+    const current = await this.state.storage.getAlarm();
+    if (!current || Math.abs(current - at) > 500) {
+      await this.state.storage.setAlarm(at);
+    }
+  }
+
+  async runDue() {
+    const now = Date.now();
+    const vapid = vapidConfig(this.env);
+    const subs = await this.subs();
+    const list = await this.alerts();
+    const remaining = [];
+    let sent = 0;
+    let failed = 0;
+
+    for (const record of list) {
+      if (record.fireAt > now) {
+        remaining.push(record);
+        continue;
+      }
+      if (now - record.fireAt > 15 * 60 * 1000) continue;
+
+      const subscription = subs[record.subId];
+      if (!subscription) continue;
+
+      try {
+        const result = await sendPush(subscription, {
+          title: record.title,
+          body: record.body,
+          tag: record.tag,
+          url: './',
+        }, vapid);
+
+        if (result.ok) {
+          sent += 1;
+          continue;
+        }
+        if (result.status === 404 || result.status === 410) {
+          delete subs[record.subId];
+          continue;
+        }
+      } catch (error) {
+        console.error('alert failed', record.id, error);
+      }
+
+      record.attempts = (record.attempts || 0) + 1;
+      failed += 1;
+      if (record.attempts < 5) {
+        record.fireAt = now + 60 * 1000;
+        remaining.push(record);
+      }
+    }
+
+    await this.state.storage.put('subs', subs);
+    await this.state.storage.put('alerts', remaining);
+    await this.arm(remaining);
+    return { sent, failed };
   }
 
   async alarm() {
     try {
-      await sendDueAlerts(this.env);
+      await this.runDue();
     } catch (error) {
-      console.error('scheduled send failed', error);
-    }
-    try {
-      const next = await nextAlarm(this.env);
-      const target = next && Number.isFinite(Number(next.at))
-        ? Math.max(Number(next.at), Date.now() + 1000)
-        : Date.now() + 24 * 60 * 60 * 1000;
-      await this.state.storage.setAlarm(target);
-    } catch (error) {
-      console.error('scheduler reschedule failed', error);
+      console.error('scheduler alarm failed', error);
+      await this.state.storage.setAlarm(Date.now() + 60 * 1000);
     }
   }
 }
@@ -424,28 +553,9 @@ function schedulerStub(env) {
   return env.SCHEDULER.get(env.SCHEDULER.idFromName('global'));
 }
 
-async function bumpScheduler(env, fireAt) {
-  const stub = schedulerStub(env);
-  if (!stub) return;
-  try {
-    await stub.fetch('https://scheduler/bump', {
-      method: 'POST',
-      body: JSON.stringify({ at: Number(fireAt) }),
-    });
-  } catch (error) {
-    /* the cron fallback still covers this */
-    console.error('scheduler bump failed', error);
-  }
-}
-
-async function tickScheduler(env) {
-  const stub = schedulerStub(env);
-  if (!stub) return;
-  try {
-    await stub.fetch('https://scheduler/tick');
-  } catch (error) {
-    console.error('scheduler tick failed', error);
-  }
+async function relayScheduler(response, origin) {
+  const data = await response.json().catch(() => ({ error: 'scheduler error' }));
+  return json(data, response.status, origin);
 }
 
 /* ---------------- worker ---------------- */
@@ -479,9 +589,22 @@ export default {
         return json({ error: 'alert.id and alert.fireAt are required' }, 400, origin);
       }
 
+      if (env.SCHEDULER) {
+        const subId = await subIdFor(body.subscription.endpoint);
+        const response = await schedulerStub(env).fetch('https://scheduler/alerts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subId,
+            subscription: body.subscription,
+            alerts: [body.alert],
+          }),
+        });
+        return relayScheduler(response, origin);
+      }
+
       const stored = await storeAlert(env, body.subscription, body.alert);
       await noteNext(env, stored.fireAt);
-      await bumpScheduler(env, stored.fireAt);
       return json({ ok: true, ...stored }, 200, origin);
     }
 
@@ -502,19 +625,39 @@ export default {
         return json({ error: `alerts must be 1-${MAX_ALERT_BATCH} valid alert objects` }, 400, origin);
       }
 
+      if (env.SCHEDULER) {
+        const subId = await subIdFor(body.subscription.endpoint);
+        const response = await schedulerStub(env).fetch('https://scheduler/alerts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subId,
+            subscription: body.subscription,
+            alerts: body.alerts,
+          }),
+        });
+        return relayScheduler(response, origin);
+      }
+
       const subId = await storeSubscription(env, body.subscription);
       const fireAt = [];
       for (const alert of body.alerts) {
         fireAt.push(await storeOneAlert(env, subId, alert));
       }
       await noteNext(env, Math.min(...fireAt));
-      await bumpScheduler(env, Math.min(...fireAt));
       return json({ ok: true, subId, alerts: body.alerts.length, fireAt }, 200, origin);
     }
 
     if (url.pathname === '/alert' && request.method === 'DELETE') {
       const id = url.searchParams.get('id');
       if (!id) return json({ error: 'id is required' }, 400, origin);
+      if (env.SCHEDULER) {
+        const response = await schedulerStub(env).fetch(
+          `https://scheduler/alert?id=${encodeURIComponent(id)}`,
+          { method: 'DELETE' },
+        );
+        return relayScheduler(response, origin);
+      }
       await env.ALERTS.delete(`alert:${id}`);
       return json({ ok: true }, 200, origin);
     }
@@ -522,6 +665,10 @@ export default {
     /* Diagnostics below are unauthenticated: they only report counts and
        can trigger a scan of alerts that are already due. */
     if (url.pathname === '/alerts') {
+      if (env.SCHEDULER) {
+        const response = await schedulerStub(env).fetch('https://scheduler/alerts');
+        return relayScheduler(response, origin);
+      }
       const listed = await env.ALERTS.list({ prefix: 'alert:' });
       return json({ count: listed.keys.length }, 200, origin);
     }
@@ -551,8 +698,16 @@ export default {
         report.error = String(error && error.message ? error.message : error);
       }
       try {
-        const listed = await env.ALERTS.list({ prefix: 'alert:' });
-        report.alerts = listed.keys.length;
+        if (env.SCHEDULER) {
+          const response = await schedulerStub(env).fetch('https://scheduler/status');
+          const status = await response.json();
+          report.alerts = status.count;
+          report.scheduler = 'durable-object';
+        } else {
+          const listed = await env.ALERTS.list({ prefix: 'alert:' });
+          report.alerts = listed.keys.length;
+          report.scheduler = 'next-pointer';
+        }
       } catch (error) {
         report.error = String(error && error.message ? error.message : error);
       }
@@ -562,6 +717,12 @@ export default {
     /* Runs the same scan as the cron, to check sending without waiting. */
     if (url.pathname === '/run' && request.method === 'POST') {
       try {
+        if (env.SCHEDULER) {
+          const response = await schedulerStub(env).fetch('https://scheduler/run', {
+            method: 'POST',
+          });
+          return relayScheduler(response, origin);
+        }
         const result = await sendDueAlerts(env);
         return json({ ok: true, ...result }, 200, origin);
       } catch (error) {
@@ -579,13 +740,12 @@ export default {
         return;
       }
 
-      /* Watchdog: normally the DO alarm sends. Only scan here if the pointer
-         is badly overdue, which also recovers a lost/blocked alarm. */
-      const next = await nextAlarm(env);
-      if (!next || Number(next.at) <= Date.now() - 2 * 60 * 1000) {
-        await sendDueAlerts(env);
-      }
-      await tickScheduler(env);
+      /* Watchdog: normally the DO alarm sends; this only acts if the alarm
+         is missing or badly overdue, and re-arms otherwise. */
+      const response = await schedulerStub(env).fetch('https://scheduler/watchdog', {
+        method: 'POST',
+      });
+      if (!response.ok) throw new Error(`scheduler watchdog ${response.status}`);
     })().catch((error) => {
       console.error('scheduled run failed', error);
     }));

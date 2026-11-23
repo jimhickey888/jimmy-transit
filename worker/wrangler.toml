@@ -23,7 +23,7 @@ new_sqlite_classes = ["AlertScheduler"]
 # then replace the id below with the one it prints.
 [[kv_namespaces]]
 binding = "ALERTS"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "08bb001be7904c1787a7dbd203a09373"
 
 [vars]
 VAPID_SUBJECT = "mailto:jimhickey888@users.noreply.github.com"

@@ -1,3 +1,4 @@
 worker/.vapid/
 __pycache__/
 *.pyc
+worker/.wrangler/

@@ -13,8 +13,8 @@
 <h1>Durable Object scheduler test</h1>
 <p>Serve the repo with <code>python3 -m http.server 8000</code> and open
 <code>/worker/test/do-scheduler-test.html</code>. It exercises the
-<code>AlertScheduler</code> class with fake storage and KV, so the alarm
-timing can be checked before deploying.</p>
+<code>AlertScheduler</code> class with fake storage, so the alarm timing and
+storage logic can be checked before deploying.</p>
 <pre id="out">running…</pre>
 
 <script type="module">
@@ -39,28 +39,15 @@ function b64url(bytes) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-class FakeKV {
-  constructor() { this.map = new Map(); }
-  async get(key, type) {
-    const value = this.map.get(key);
-    if (value === undefined) return null;
-    return type === 'json' ? JSON.parse(value) : value;
-  }
-  async put(key, value) { this.map.set(key, String(value)); }
-  async delete(key) { this.map.delete(key); }
-  async list({ prefix = '' } = {}) {
-    const keys = [...this.map.keys()]
-      .filter((key) => key.startsWith(prefix))
-      .map((name) => ({ name }));
-    return { keys, list_complete: true };
-  }
-}
-
 function makeState() {
+  const map = new Map();
   let alarm = null;
   return {
+    map,
     get alarm() { return alarm; },
     storage: {
+      async get(key) { return map.get(key); },
+      async put(key, value) { map.set(key, value); },
       async getAlarm() { return alarm; },
       async setAlarm(at) { alarm = at; },
     },
@@ -68,7 +55,6 @@ function makeState() {
 }
 
 async function main() {
-  const kv = new FakeKV();
   const state = makeState();
 
   const signing = await crypto.subtle.generateKey(
@@ -90,7 +76,6 @@ async function main() {
   };
 
   const env = {
-    ALERTS: kv,
     VAPID_PRIVATE_JWK: JSON.stringify(jwk),
     VAPID_PUBLIC_KEY: b64url(vapidPublic),
     VAPID_SUBJECT: 'mailto:test@example.com',
@@ -109,42 +94,60 @@ async function main() {
   const scheduler = new AlertScheduler(state, env);
   const now = Date.now();
 
-  await scheduler.ensureAlarm(now + 5000);
-  check('bump sets an alarm', Math.abs(state.alarm - (now + 5000)) < 100, `alarm=${state.alarm}`);
+  const schedule = async (alerts) => {
+    const response = await scheduler.fetch(new Request('https://scheduler/alerts', {
+      method: 'POST',
+      body: JSON.stringify({ subId: 'test', subscription, alerts }),
+    }));
+    return response.json();
+  };
 
-  const firstAlarm = state.alarm;
-  await scheduler.ensureAlarm(now + 60000);
-  check('later bump keeps the earlier alarm', state.alarm === firstAlarm);
+  const alert = (id, fireAt) => ({
+    id, fireAt, title: `85 ${id}`, body: 'Healthy Village', tag: id,
+  });
 
-  await scheduler.fetch(new Request('https://scheduler/bump', {
-    method: 'POST',
-    body: JSON.stringify({ at: now + 1000 }),
-  }));
-  check('fetch /bump moves the alarm earlier', state.alarm === now + 1000, `alarm=${state.alarm}`);
+  const first = await schedule([alert('a', now + 30000), alert('b', now + 60000)]);
+  check('schedule accepts two alerts', first.ok === true && first.alerts === 2);
+  check('alarm set to the earliest alert', Math.abs(state.alarm - (now + 30000)) < 1500, `alarm=${state.alarm}`);
 
-  // Future alert: tick should pick up the KV pointer.
-  state.storage.setAlarm(0);
-  kv.map.set('sub:test', JSON.stringify(subscription));
-  kv.map.set('meta:next', JSON.stringify({ at: now + 30000 }));
-  await scheduler.fetch(new Request('https://scheduler/tick'));
-  check('tick uses the KV pointer', state.alarm === now + 30000, `alarm=${state.alarm}`);
+  const count = await scheduler.fetch(new Request('https://scheduler/alerts')).then((r) => r.json());
+  check('count reports both alerts', count.count === 2, `count=${count.count}`);
 
-  // Due alert: the alarm sends and reschedules.
-  kv.map.set('alert:do-test', JSON.stringify({
-    subId: 'test', fireAt: now - 1000, title: '85 in 2 min',
-    body: 'Healthy Village', tag: 'do', attempts: 0,
-  }));
-  kv.map.set('meta:next', JSON.stringify({ at: now - 500 }));
-  const before = pushCalls;
   await scheduler.alarm();
-  check('alarm sends the due alert', pushCalls === before + 1, `pushes=${pushCalls}`);
-  check('alarm removes the alert', !kv.map.has('alert:do-test'));
-  check('alarm schedules the next check', state.alarm > Date.now(), `alarm=${state.alarm}`);
+  check('early alarm sends nothing', pushCalls === 0, `pushes=${pushCalls}`);
 
-  // Nothing queued: the next alarm should be well in the future.
+  // Make alert "a" due and fire the alarm.
+  const stored = state.map.get('alerts').map((item) => (
+    item.id === 'a' ? { ...item, fireAt: now - 1000 } : item
+  ));
+  state.map.set('alerts', stored);
   await scheduler.alarm();
-  check('idle alarm does not send', pushCalls === before + 1, `pushes=${pushCalls}`);
-  check('idle alarm waits at least 30 minutes', state.alarm > Date.now() + 30 * 60 * 1000, `alarm=${state.alarm}`);
+  check('alarm sends the due alert', pushCalls === 1, `pushes=${pushCalls}`);
+  const afterSend = state.map.get('alerts');
+  check('sent alert is removed', !afterSend.some((item) => item.id === 'a'));
+  check('remaining alert keeps its time', afterSend.length === 1 && afterSend[0].id === 'b');
+  check('alarm moves to the remaining alert', Math.abs(state.alarm - (now + 60000)) < 2000, `alarm=${state.alarm}`);
+
+  const cancelled = await scheduler.fetch(new Request('https://scheduler/alert?id=b', { method: 'DELETE' }));
+  check('delete accepts', (await cancelled.json()).ok === true);
+  const afterCancel = await scheduler.fetch(new Request('https://scheduler/alerts')).then((r) => r.json());
+  check('delete removes the alert', afterCancel.count === 0);
+  check('empty schedule sets an idle alarm', state.alarm > Date.now() + 30 * 60 * 1000, `alarm=${state.alarm}`);
+
+  // Rescheduling the same id replaces the record and pulls the alarm earlier.
+  await schedule([alert('c', now + 60000)]);
+  const alarmLater = state.alarm;
+  await schedule([alert('c', now + 20000)]);
+  check('same id is upserted', state.map.get('alerts').filter((item) => item.id === 'c').length === 1);
+  check('earlier reschedule pulls the alarm in', state.alarm < alarmLater, `alarm=${state.alarm}`);
+
+  // Watchdog sends a due alert even if the alarm was lost.
+  state.map.set('alerts', state.map.get('alerts').map((item) => ({ ...item, fireAt: now - 1000 })));
+  state.storage.setAlarm(null);
+  const beforeWatchdog = pushCalls;
+  await scheduler.fetch(new Request('https://scheduler/watchdog', { method: 'POST' }));
+  check('watchdog sends overdue alerts', pushCalls === beforeWatchdog + 1, `pushes=${pushCalls}`);
+  check('watchdog clears the queue', state.map.get('alerts').length === 0);
 
   lines.push('');
   lines.push(failures ? `${failures} CHECK(S) FAILED` : 'ALL CHECKS PASSED');

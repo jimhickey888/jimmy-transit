@@ -171,8 +171,9 @@ at zero, and clears itself two minutes after the bus is due.
 iOS has no scheduled local notifications for web apps, and a service worker
 cannot wake itself, so a notification while the phone is locked needs a
 push sender. `worker/` is a small Cloudflare Worker (free plan) that stores
-one alert per milestone (10, 8, 6, 4, 2 and 0 minutes) in KV and sends each
-from a one-minute cron trigger.
+one alert per milestone (10, 8, 6, 4, 2 and 0 minutes) in a Durable Object
+and fires each from an alarm at the due time; KV remains as a fallback when
+the Durable Object binding is absent.
 
 This one is deployed at
 `https://jimmy-transit-push.jimhickey.workers.dev` and configured in
