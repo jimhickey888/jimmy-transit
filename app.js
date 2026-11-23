@@ -12,8 +12,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.10.2';
-const APP_BUILD = '23 Nov 2026, 22:52 HKT';
+const APP_VERSION = '2.10.3';
+const APP_BUILD = '23 Nov 2026, 23:39 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -1159,12 +1159,12 @@ function infoHtml() {
       <h2>Alerts</h2>
       <p class="info-note">
         With push set up, the alert chip schedules notifications labelled 10,
-        8, 6, 4, 2 and 0 minutes, each sent a minute before its label (11, 9,
-        7, 5, 3 and 1 minutes before departure). If an updated arrival time
-        passes a milestone, it fires immediately instead of being skipped. In
-        the app the milestones beep and flash the countdown. iOS only allows
-        web push for apps added to the Home Screen, and delivery is best
-        effort.
+        8, 6, 4, 2 and 0 minutes, each sent two minutes before its label (12,
+        10, 8, 6, 4 and 2 minutes before departure). The final alert says
+        “departing”. If an updated arrival time passes a milestone, it fires
+        immediately instead of being skipped. In the app the milestones beep
+        and flash the countdown. iOS only allows web push for apps added to
+        the Home Screen, and delivery is best effort.
       </p>
     </section>
     <p class="info-note">
@@ -1390,14 +1390,15 @@ async function rescheduleAlert() {
   } catch { /* keep the old schedule */ }
 }
 
-/* Every milestone fires one minute early, so the "10 min" alert lands at
-   11 minutes before the arrival and "due" lands one minute before. */
-const ALERT_LEAD_MS = 60000;
+/* Every milestone fires two minutes early, so the "10 min" alert lands at
+   12 minutes before the arrival and the final one ("departing") lands two
+   minutes before. */
+const ALERT_LEAD_MIN = 2;
 
 function alertSteps(targetMs) {
   return ALERT_MINUTES.map((minutes) => ({
     minutes,
-    fireAt: targetMs - (minutes + 1) * ALERT_LEAD_MS,
+    fireAt: targetMs - (minutes + ALERT_LEAD_MIN) * 60000,
   }));
 }
 
@@ -1799,7 +1800,7 @@ async function scheduleAlert(sub) {
       fireAt: step.fireAt,
       leadMinutes: step.minutes,
       title: step.minutes === 0
-        ? `${t.routeCode} due now`
+        ? `${t.routeCode} departing`
         : `${t.routeCode} in ${step.minutes} min`,
       body,
       tag: id,

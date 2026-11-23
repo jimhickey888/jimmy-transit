@@ -108,9 +108,10 @@ poles serve more than one direction.
   stays awake while you watch a bus approach.
 - With the optional push worker deployed, the same bar has an **Alerts
   10 → 0 min** chip: Web Push notifications labelled **10, 8, 6, 4, 2 and
-  0 minutes**, each sent **one minute earlier than its label** (the 10-minute
-  alert arrives about 11 minutes before the bus, "due" arrives one minute
-  before), with the route, stop and stop ID. If the live prediction moves
+  0 minutes**, each sent **two minutes earlier than its label** (the
+  10-minute alert arrives about 12 minutes before the bus, and the final
+  alert says **departing** two minutes before), with the route, stop and stop
+  ID. If the live prediction moves
   earlier and a milestone would be missed, it is sent immediately instead of
   being skipped. The app beeps and flashes the countdown at the labels
   themselves. See `worker/README.md`.

@@ -1,8 +1,8 @@
 # Jimmy Transit push worker
 
 Sends **Web Push notifications labelled 10, 8, 6, 4, 2 and 0 minutes**, each
-one minute earlier than its label (so 11, 9, 7, 5, 3 and 1 minutes before the
-bus) — one alert record per milestone, fired by the cron.
+two minutes earlier than its label (so 12, 10, 8, 6, 4 and 2 minutes before
+the bus; the final alert says “departing”) — one alert record per milestone.
 It is a single Cloudflare Worker (free plan is enough) with a KV namespace
 and a one-minute cron trigger. The app itself stays static on GitHub Pages.
 
@@ -115,7 +115,7 @@ delivery remains best effort.
 2. Tap an arrival to track it, then tap **Alerts 10 → 0 min** and allow
    notifications (tap the chip once more after the permission prompt).
 3. The chip turns green (**Alerts on · 10→0**). Tap it again to cancel.
-4. Notifications look like `85 in 10 min`, `85 in 8 min`, …, `85 due now`,
+4. Notifications look like `85 in 10 min`, `85 in 8 min`, …, `85 departing`,
    each with `Healthy Village · Stop 001276 · → North Point`.
 
 Notes and limits:
