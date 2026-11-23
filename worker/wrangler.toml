@@ -6,7 +6,18 @@ main = "worker.js"
 compatibility_date = "2026-11-01"
 
 [triggers]
+# The minute cron is a watchdog; with the Durable Object binding the alarm
+# actually sends at the due second.
 crons = ["* * * * *"]
+
+[[durable_objects.bindings]]
+name = "SCHEDULER"
+class_name = "AlertScheduler"
+
+# SQLite-backed Durable Objects are available on the free plan.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AlertScheduler"]
 
 # Create the namespace first: npx wrangler kv namespace create ALERTS
 # then replace the id below with the one it prints.

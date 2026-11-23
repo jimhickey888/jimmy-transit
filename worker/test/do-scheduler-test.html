@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Durable Object scheduler test</title>
+<style>
+  body { font: 14px/1.5 ui-monospace, Menlo, monospace; padding: 20px; }
+  .pass { color: #0b7a45; }
+  .fail { color: #c00; font-weight: 700; }
+</style>
+</head>
+<body>
+<h1>Durable Object scheduler test</h1>
+<p>Serve the repo with <code>python3 -m http.server 8000</code> and open
+<code>/worker/test/do-scheduler-test.html</code>. It exercises the
+<code>AlertScheduler</code> class with fake storage and KV, so the alarm
+timing can be checked before deploying.</p>
+<pre id="out">running…</pre>
+
+<script type="module">
+import { AlertScheduler } from '../worker.js';
+
+const out = document.getElementById('out');
+const lines = [];
+let failures = 0;
+
+function check(name, ok, detail = '') {
+  if (!ok) failures += 1;
+  lines.push(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
+  out.innerHTML = lines.map((line) => (
+    line.startsWith('PASS') ? `<span class="pass">${line}</span>`
+      : line.startsWith('FAIL') ? `<span class="fail">${line}</span>` : line
+  )).join('\n');
+}
+
+function b64url(bytes) {
+  let binary = '';
+  for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+class FakeKV {
+  constructor() { this.map = new Map(); }
+  async get(key, type) {
+    const value = this.map.get(key);
+    if (value === undefined) return null;
+    return type === 'json' ? JSON.parse(value) : value;
+  }
+  async put(key, value) { this.map.set(key, String(value)); }
+  async delete(key) { this.map.delete(key); }
+  async list({ prefix = '' } = {}) {
+    const keys = [...this.map.keys()]
+      .filter((key) => key.startsWith(prefix))
+      .map((name) => ({ name }));
+    return { keys, list_complete: true };
+  }
+}
+
+function makeState() {
+  let alarm = null;
+  return {
+    get alarm() { return alarm; },
+    storage: {
+      async getAlarm() { return alarm; },
+      async setAlarm(at) { alarm = at; },
+    },
+  };
+}
+
+async function main() {
+  const kv = new FakeKV();
+  const state = makeState();
+
+  const signing = await crypto.subtle.generateKey(
+    { name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign'],
+  );
+  const jwk = await crypto.subtle.exportKey('jwk', signing.privateKey);
+  const vapidPublic = new Uint8Array(await crypto.subtle.exportKey('raw', signing.publicKey));
+
+  const ua = await crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'],
+  );
+  const uaPublic = new Uint8Array(await crypto.subtle.exportKey('raw', ua.publicKey));
+  const subscription = {
+    endpoint: 'https://example.test/push',
+    keys: {
+      p256dh: b64url(uaPublic),
+      auth: b64url(crypto.getRandomValues(new Uint8Array(16))),
+    },
+  };
+
+  const env = {
+    ALERTS: kv,
+    VAPID_PRIVATE_JWK: JSON.stringify(jwk),
+    VAPID_PUBLIC_KEY: b64url(vapidPublic),
+    VAPID_SUBJECT: 'mailto:test@example.com',
+  };
+
+  const realFetch = window.fetch;
+  let pushCalls = 0;
+  window.fetch = async (url, options) => {
+    if (String(url).startsWith('https://example.test/push')) {
+      pushCalls += 1;
+      return new Response('', { status: 201 });
+    }
+    return realFetch(url, options);
+  };
+
+  const scheduler = new AlertScheduler(state, env);
+  const now = Date.now();
+
+  await scheduler.ensureAlarm(now + 5000);
+  check('bump sets an alarm', Math.abs(state.alarm - (now + 5000)) < 100, `alarm=${state.alarm}`);
+
+  const firstAlarm = state.alarm;
+  await scheduler.ensureAlarm(now + 60000);
+  check('later bump keeps the earlier alarm', state.alarm === firstAlarm);
+
+  await scheduler.fetch(new Request('https://scheduler/bump', {
+    method: 'POST',
+    body: JSON.stringify({ at: now + 1000 }),
+  }));
+  check('fetch /bump moves the alarm earlier', state.alarm === now + 1000, `alarm=${state.alarm}`);
+
+  // Future alert: tick should pick up the KV pointer.
+  state.storage.setAlarm(0);
+  kv.map.set('sub:test', JSON.stringify(subscription));
+  kv.map.set('meta:next', JSON.stringify({ at: now + 30000 }));
+  await scheduler.fetch(new Request('https://scheduler/tick'));
+  check('tick uses the KV pointer', state.alarm === now + 30000, `alarm=${state.alarm}`);
+
+  // Due alert: the alarm sends and reschedules.
+  kv.map.set('alert:do-test', JSON.stringify({
+    subId: 'test', fireAt: now - 1000, title: '85 in 2 min',
+    body: 'Healthy Village', tag: 'do', attempts: 0,
+  }));
+  kv.map.set('meta:next', JSON.stringify({ at: now - 500 }));
+  const before = pushCalls;
+  await scheduler.alarm();
+  check('alarm sends the due alert', pushCalls === before + 1, `pushes=${pushCalls}`);
+  check('alarm removes the alert', !kv.map.has('alert:do-test'));
+  check('alarm schedules the next check', state.alarm > Date.now(), `alarm=${state.alarm}`);
+
+  // Nothing queued: the next alarm should be well in the future.
+  await scheduler.alarm();
+  check('idle alarm does not send', pushCalls === before + 1, `pushes=${pushCalls}`);
+  check('idle alarm waits at least 30 minutes', state.alarm > Date.now() + 30 * 60 * 1000, `alarm=${state.alarm}`);
+
+  lines.push('');
+  lines.push(failures ? `${failures} CHECK(S) FAILED` : 'ALL CHECKS PASSED');
+  out.innerHTML = lines.map((line) => {
+    if (line.startsWith('FAIL') || line.includes('FAILED')) return `<span class="fail">${line}</span>`;
+    if (line.startsWith('PASS')) return `<span class="pass">${line}</span>`;
+    return line;
+  }).join('\n');
+
+  window.fetch = realFetch;
+}
+
+main().catch((error) => {
+  check('test harness ran', false, error && error.message);
+  console.error(error);
+});
+</script>
+</body>
+</html>

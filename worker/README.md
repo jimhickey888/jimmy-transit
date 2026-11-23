@@ -87,6 +87,30 @@ the old once-a-minute scan used 1,440 list operations a day against a
 per batch of due alerts; reads stay around 1,440/day (100,000 allowed).
 Do not change the cron back to listing every minute.
 
+## Optional: Durable Object scheduler (second-level timing)
+
+The cron trigger cannot run more often than once a minute. For precision, the
+worker can put the schedule in a Durable Object and set an **alarm** at the
+next fire time; the alarm sends within seconds and then schedules the next
+one. The minute cron remains as a watchdog and for recovery.
+
+This needs the `SCHEDULER` Durable Object binding, which the Cloudflare
+dashboard does not reliably let you add to an existing Worker. Use Wrangler:
+
+```sh
+cd worker
+npx wrangler deploy
+```
+
+`wrangler.toml` already declares the binding and the `v1` migration
+(`new_sqlite_classes`, free plan). After deploying, `/health` reports
+`"scheduler":"durable-object"`; without the binding it still reports
+`"next-pointer"` and behaves exactly as before.
+
+The client is unchanged. With the DO enabled, alerts can land within a few
+seconds of their scheduled time instead of within the minute, though iOS
+delivery remains best effort.
+
 ## 5. Using it on the phone
 
 1. The app must be on the Home Screen (iOS only allows web push there), and

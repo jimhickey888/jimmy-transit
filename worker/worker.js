@@ -359,6 +359,95 @@ export async function sendDueAlerts(env) {
   return { sent, failed };
 }
 
+/* ---------------- durable object scheduler ---------------- */
+
+/* Optional: one instance schedules an alarm at the next due time, so alerts
+   go out within seconds without the cron polling KV. Without the SCHEDULER
+   binding the worker falls back to the cron scan. */
+export class AlertScheduler {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    try {
+      if (url.pathname === '/bump') {
+        const body = await request.json().catch(() => ({}));
+        await this.ensureAlarm(Number(body.at));
+      } else if (url.pathname === '/tick') {
+        await this.ensureAlarm();
+      } else {
+        return new Response('not found', { status: 404 });
+      }
+    } catch (error) {
+      console.error('scheduler fetch failed', error);
+      return new Response('error', { status: 500 });
+    }
+    return new Response('ok');
+  }
+
+  async ensureAlarm(preferred) {
+    const current = await this.state.storage.getAlarm();
+    const next = await nextAlarm(this.env);
+    const candidates = [preferred, next && Number(next.at)]
+      .filter((value) => Number.isFinite(value));
+    const target = candidates.length
+      ? Math.min(...candidates)
+      : Date.now() + 24 * 60 * 60 * 1000;
+    if (!current || target < current) {
+      await this.state.storage.setAlarm(target);
+    }
+  }
+
+  async alarm() {
+    try {
+      await sendDueAlerts(this.env);
+    } catch (error) {
+      console.error('scheduled send failed', error);
+    }
+    try {
+      const next = await nextAlarm(this.env);
+      const target = next && Number.isFinite(Number(next.at))
+        ? Math.max(Number(next.at), Date.now() + 1000)
+        : Date.now() + 24 * 60 * 60 * 1000;
+      await this.state.storage.setAlarm(target);
+    } catch (error) {
+      console.error('scheduler reschedule failed', error);
+    }
+  }
+}
+
+function schedulerStub(env) {
+  if (!env.SCHEDULER) return null;
+  return env.SCHEDULER.get(env.SCHEDULER.idFromName('global'));
+}
+
+async function bumpScheduler(env, fireAt) {
+  const stub = schedulerStub(env);
+  if (!stub) return;
+  try {
+    await stub.fetch('https://scheduler/bump', {
+      method: 'POST',
+      body: JSON.stringify({ at: Number(fireAt) }),
+    });
+  } catch (error) {
+    /* the cron fallback still covers this */
+    console.error('scheduler bump failed', error);
+  }
+}
+
+async function tickScheduler(env) {
+  const stub = schedulerStub(env);
+  if (!stub) return;
+  try {
+    await stub.fetch('https://scheduler/tick');
+  } catch (error) {
+    console.error('scheduler tick failed', error);
+  }
+}
+
 /* ---------------- worker ---------------- */
 
 export default {
@@ -372,7 +461,7 @@ export default {
     }
 
     if (url.pathname === '/' || url.pathname === '/health') {
-      return json({ ok: true, service: 'jimmy-transit-push', scheduler: 'next-pointer', now: Date.now() }, 200, origin);
+      return json({ ok: true, service: 'jimmy-transit-push', scheduler: env.SCHEDULER ? 'durable-object' : 'next-pointer', now: Date.now() }, 200, origin);
     }
 
     if (url.pathname === '/alert' && request.method === 'POST') {
@@ -392,6 +481,7 @@ export default {
 
       const stored = await storeAlert(env, body.subscription, body.alert);
       await noteNext(env, stored.fireAt);
+      await bumpScheduler(env, stored.fireAt);
       return json({ ok: true, ...stored }, 200, origin);
     }
 
@@ -418,6 +508,7 @@ export default {
         fireAt.push(await storeOneAlert(env, subId, alert));
       }
       await noteNext(env, Math.min(...fireAt));
+      await bumpScheduler(env, Math.min(...fireAt));
       return json({ ok: true, subId, alerts: body.alerts.length, fireAt }, 200, origin);
     }
 
@@ -482,8 +573,21 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(sendDueAlerts(env).catch((error) => {
-      console.error('sendDueAlerts failed', error);
+    ctx.waitUntil((async () => {
+      if (!env.SCHEDULER) {
+        await sendDueAlerts(env);
+        return;
+      }
+
+      /* Watchdog: normally the DO alarm sends. Only scan here if the pointer
+         is badly overdue, which also recovers a lost/blocked alarm. */
+      const next = await nextAlarm(env);
+      if (!next || Number(next.at) <= Date.now() - 2 * 60 * 1000) {
+        await sendDueAlerts(env);
+      }
+      await tickScheduler(env);
+    })().catch((error) => {
+      console.error('scheduled run failed', error);
     }));
   },
 };
