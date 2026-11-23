@@ -12,8 +12,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.10.8';
-const APP_BUILD = '24 Nov 2026, 00:38 HKT';
+const APP_VERSION = '2.11.0';
+const APP_BUILD = '24 Nov 2026, 01:04 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -21,13 +21,13 @@ const PUSH_ENDPOINT = 'https://jimmy-transit-push.jimhickey.workers.dev';
 const PUSH_VAPID_KEY = 'BCPXl_A_ZsChEqNNcVJgMpjKCvKXUlpFE1-TQlxoPgYxLOUDX09V49xnJ4U6DKK1BS80-upzWIAB3aOBNeyC2DM';
 /* Alerts are scheduled at these minutes before departure (0 = due). */
 const ALERT_STEPS = [
-  { key: '10', lead: 12, title: (code) => `${code} in 10 min` },
-  { key: '8', lead: 10, title: (code) => `${code} in 8 min` },
-  { key: '6', lead: 8, title: (code) => `${code} in 6 min` },
-  { key: '4', lead: 6, title: (code) => `${code} in 4 min` },
-  { key: '2', lead: 4, title: (code) => `${code} in 2 min` },
-  { key: 'arriving', lead: 2, title: (code) => `${code} arriving` },
-  { key: '0', lead: 0, title: (code) => `${code} departing` },
+  { key: '10', base: 10, type: 'label', title: (code) => `${code} in 10 min` },
+  { key: '8', base: 8, type: 'label', title: (code) => `${code} in 8 min` },
+  { key: '6', base: 6, type: 'label', title: (code) => `${code} in 6 min` },
+  { key: '4', base: 4, type: 'label', title: (code) => `${code} in 4 min` },
+  { key: '2', base: 2, type: 'label', title: (code) => `${code} in 2 min` },
+  { key: 'arriving', base: 0, type: 'arriving', title: (code) => `${code} arriving` },
+  { key: '0', base: 0, type: 'departing', title: (code) => `${code} departing` },
 ];
 /* In-app beeps happen at the same points, in seconds before departure. */
 const IN_APP_MARKS = [600, 480, 360, 240, 120, 0];
@@ -71,6 +71,13 @@ const SNAP_MAX_AGE = 15 * 60 * 1000;
 const PAGE_STALE_MS = 10000;
 
 PAGES.push({
+  id: 'settings',
+  title: 'Settings',
+  subtitle: 'Push notifications',
+  api: 'settings',
+  routes: [],
+});
+PAGES.push({
   id: 'info',
   title: 'Info',
   subtitle: 'Endpoints · Build',
@@ -82,11 +89,15 @@ const MAX_ETAS = 3;
 const MOVE_THRESHOLD_M = 20;
 
 const loadPrefs = () => {
+  let saved = {};
   try {
-    return { screenOn: false, ...JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') };
-  } catch {
-    return { screenOn: false };
-  }
+    saved = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+  } catch { /* corrupt storage */ }
+  const prefs = { screenOn: false, pushBuffer: 2, ...saved };
+  prefs.pushBuffer = [0, 1, 2].includes(Number(prefs.pushBuffer))
+    ? Number(prefs.pushBuffer)
+    : 2;
+  return prefs;
 };
 
 const loadTracked = () => {
@@ -536,7 +547,7 @@ async function fetchSegment(direction, route) {
 /* Only the static Info page is always rendered; every live page loads and
    refreshes only while it is the page on screen. */
 function pageIsEager(page) {
-  return page.api === 'info';
+  return page.api === 'info' || page.api === 'settings';
 }
 
 function pageIsLoaded(page) {
@@ -640,7 +651,7 @@ async function refresh(force = false) {
       }
       continue;
     }
-    if (page.api === 'info') continue;
+    if (page.api === 'info' || page.api === 'settings') continue;
     for (const [key, job] of new Map(pageJobs(page).map((item) => [keyOf(item.page, item.route, item.stop), item]))) {
       jobs.set(key, job);
     }
@@ -1128,6 +1139,56 @@ function callsHtml() {
     </section>`;
 }
 
+function pushBufferText(buffer) {
+  if (buffer === 2) {
+    return 'Alerts fire two minutes before their labelled time (“arriving” two minutes before the bus, “departing” at arrival).';
+  }
+  if (buffer === 1) {
+    return 'Alerts fire one minute before their labelled time (“arriving” one minute before, “departing” at arrival).';
+  }
+  return 'Alerts fire at their labelled times (“arriving” at arrival, “departing” one minute after).';
+}
+
+function settingsHtml() {
+  const buffer = pushBuffer();
+  return `
+    <section class="info-block">
+      <h2>Push notifications</h2>
+      <div class="info-card">
+        <div class="pref-row">
+          <div class="pref-main">
+            <div class="pref-title">Push notifications buffer</div>
+            <div class="pref-hint">Extra lead time before each alert.</div>
+          </div>
+          <div class="seg" role="group" aria-label="Push notifications buffer">
+            ${[[2, '2 min'], [1, '1 min'], [0, 'Off']].map(([value, label]) => `
+              <button class="seg-btn" type="button" data-buffer="${value}"
+                aria-pressed="${buffer === value}">${label}</button>`).join('')}
+          </div>
+        </div>
+      </div>
+      <p class="info-note">${esc(pushBufferText(buffer))}</p>
+      <p class="info-note">
+        This changes only push alerts. The in-app countdown and beeps stay at
+        10, 8, 6, 4, 2 and 0 minutes.
+      </p>
+    </section>`;
+}
+
+function setPushBuffer(value) {
+  const next = [0, 1, 2].includes(Number(value)) ? Number(value) : 2;
+  if (state.prefs.pushBuffer === next) return;
+  state.prefs.pushBuffer = next;
+  savePrefs();
+
+  const page = PAGES.find((item) => item.id === 'settings');
+  if (page) renderPage(page);
+
+  if (state.tracked && state.tracked.alert && state.tracked.alert.active) {
+    rescheduleAlert({ skipCatchUp: true, prune: true });
+  }
+}
+
 function infoHtml() {
   const endpoints = [
     ['Citybus', 'https://rt.data.gov.hk/v1/transport/batch/stop-eta/CTB/{stop_id}'],
@@ -1166,19 +1227,21 @@ function infoHtml() {
     <section class="info-block">
       <h2>Alerts</h2>
       <p class="info-note">
-        With push set up, the alert chip schedules notifications labelled 10,
-        with push, notifications are scheduled for 10, 8, 6, 4 and 2 minutes
-        (each two minutes early), plus “arriving” at two minutes before and
-        “departing” at the predicted arrival time. If an updated arrival time
-        passes a milestone, it fires immediately instead of being skipped. In
-        the app the milestones beep and flash the countdown. iOS only allows
-        web push for apps added to the Home Screen, and delivery is best
-        effort.
+        With push set up, the alert chip schedules the milestones 10, 8, 6, 4,
+        2, arriving and departing, using the buffer chosen in Settings: two
+        minutes (default), one minute, or off. The labelled alerts and
+        “arriving” move with the buffer; “departing” stays at the predicted
+        arrival time, or one minute after when the buffer is off. If an
+        updated arrival time passes a milestone, it fires immediately instead
+        of being skipped. In the app the milestones beep and flash the
+        countdown. iOS only allows web push for apps added to the Home Screen,
+        and delivery is best effort.
       </p>
     </section>
     <p class="info-note">
       Live arrivals from the Transport Department, data.gov.hk and TfL.
-      Pages: Citybus, Taikoo ↔ New Trend, KMB, Minibuses and London.
+      Pages: Citybus, Taikoo ↔ New Trend, KMB, Minibuses, London, Settings
+      and Info.
       Each page loads its data the first time you swipe to it, and only the
       page on screen keeps refreshing.
     </p>`;
@@ -1187,6 +1250,11 @@ function infoHtml() {
 function renderPage(page) {
   const el = document.getElementById(`body-${page.id}`);
   if (!el) return;
+
+  if (page.api === 'settings') {
+    el.innerHTML = settingsHtml();
+    return;
+  }
 
   if (page.api === 'info') {
     el.innerHTML = infoHtml();
@@ -1390,27 +1458,40 @@ function syncTracked() {
   }
 }
 
-async function rescheduleAlert() {
+async function rescheduleAlert(options = {}) {
   const t = state.tracked;
   if (!t || !t.alert || !t.alert.active) return;
   try {
     const sub = state.pushSub || await ensurePushSubscription();
-    await scheduleAlert(sub);
+    await scheduleAlert(sub, options);
   } catch { /* keep the old schedule */ }
 }
 
-function alertSteps(targetMs) {
-  return ALERT_STEPS.map((step) => ({
-    key: step.key,
-    lead: step.lead,
-    title: step.title,
-    fireAt: targetMs - step.lead * 60000,
-  }));
+function pushBuffer() {
+  const value = Number(state.prefs.pushBuffer);
+  return [0, 1, 2].includes(value) ? value : 2;
 }
 
-function alertPlan(targetMs) {
+function alertSteps(targetMs, bufferMinutes) {
+  const buffer = Number.isFinite(bufferMinutes) ? bufferMinutes : pushBuffer();
+  return ALERT_STEPS.map((step) => {
+    let lead;
+    if (step.type === 'label') lead = step.base + buffer;
+    else if (step.type === 'arriving') lead = buffer;
+    else lead = buffer === 0 ? -1 : 0;
+    return {
+      key: step.key,
+      lead,
+      title: step.title,
+      fireAt: targetMs - lead * 60000,
+    };
+  });
+}
+
+function alertPlan(targetMs, bufferMinutes) {
   const now = Date.now();
-  return alertSteps(targetMs).filter((step) => step.fireAt > now + 20000);
+  const buffer = Number.isFinite(bufferMinutes) ? bufferMinutes : pushBuffer();
+  return alertSteps(targetMs, buffer).filter((step) => step.fireAt > now + 20000);
 }
 
 /* Marks already in the past when tracking starts must not beep. */
@@ -1758,28 +1839,34 @@ function alertBody(t) {
 
 /* One alert per milestone still ahead: 10, 8, 6, 4, 2 and 0 minutes.
    The worker stores them separately and its cron sends each in turn. */
-async function scheduleAlert(sub) {
+async function scheduleAlert(sub, options = {}) {
   const t = state.tracked;
   if (!t) return;
 
   const now = Date.now();
+  const buffer = pushBuffer();
   const previous = t.alert && t.alert.active && t.alert.fires ? t.alert.fires : null;
   const steps = [];
 
-  for (const step of alertSteps(t.targetMs)) {
+  for (const step of alertSteps(t.targetMs, buffer)) {
     if (step.fireAt > now + 20000) {
       steps.push(step);
       continue;
     }
     const previousFire = previous ? previous[step.key] : undefined;
     /* The arrival moved earlier and passed a milestone that was still ahead
-       at the last schedule: send it now instead of skipping it. */
-    if (previous && previousFire !== undefined && previousFire > now) {
+       at the last schedule: send it now instead of skipping it. A buffer
+       change skips newly past milestones instead (options.skipCatchUp). */
+    if (!options.skipCatchUp && previous
+        && previousFire !== undefined && previousFire > now) {
       steps.push({ ...step, fireAt: now + 15000, catchUp: true });
     }
   }
 
   if (!steps.length) {
+    if (options.prune && t.alert && Array.isArray(t.alert.ids)) {
+      cancelAlert(t.alert.ids);
+    }
     t.alert = null;
     saveTracked();
     renderTracked();
@@ -1789,6 +1876,7 @@ async function scheduleAlert(sub) {
   /* Re-opening the app should not rewrite an unchanged schedule; that was
      costing six alert writes plus a subscription write per launch. */
   const unchanged = previous
+    && t.alert.buffer === buffer
     && steps.length === Object.keys(previous).length
     && steps.every((step) => Number(previous[step.key]) === Number(step.fireAt));
   if (unchanged && Date.now() - (t.alert.postedAt || 0) < 6 * 60 * 60 * 1000) {
@@ -1804,7 +1892,7 @@ async function scheduleAlert(sub) {
     return {
       id,
       fireAt: step.fireAt,
-      leadMinutes: step.lead,
+      leadMinutes: buffer,
       title: step.title(t.routeCode),
       body,
       tag: id,
@@ -1843,11 +1931,19 @@ async function scheduleAlert(sub) {
   const fires = {};
   for (const step of steps) fires[step.key] = step.fireAt;
 
+  /* A buffer change removes alerts that are no longer part of the plan. */
+  if (options.prune && t.alert && Array.isArray(t.alert.ids)) {
+    for (const old of t.alert.ids) {
+      if (!ids.includes(old)) cancelAlert(old);
+    }
+  }
+
   t.alert = {
     group,
     ids,
     minutes: steps.map((step) => step.key),
     fires,
+    buffer,
     active: true,
     postedAt: Date.now(),
   };
@@ -1913,7 +2009,7 @@ function syncChrome() {
 
   if (state.savedPage !== state.page) {
     state.savedPage = state.page;
-    try { localStorage.setItem(PAGE_KEY, String(state.page)); } catch { /* ignore */ }
+    try { localStorage.setItem(PAGE_KEY, page.id); } catch { /* ignore */ }
     /* Refresh the counters each time the Info page is opened. */
     if (page.api === 'info') renderPage(page);
   }
@@ -1993,8 +2089,15 @@ function buildPager() {
 
 function readSavedPage() {
   try {
-    const saved = Number(localStorage.getItem(PAGE_KEY) || '0');
-    return Number.isInteger(saved) ? saved : 0;
+    const saved = localStorage.getItem(PAGE_KEY);
+    if (!saved) return 0;
+    if (/^\d+$/.test(saved)) {
+      const index = Number(saved);
+      /* Older versions stored an index; page 5 was Info before Settings. */
+      return index >= 5 ? Math.min(index + 1, PAGES.length - 1) : index;
+    }
+    const index = PAGES.findIndex((page) => page.id === saved);
+    return index >= 0 ? index : 0;
   } catch {
     return 0;
   }
@@ -2035,6 +2138,12 @@ function init() {
   render();
 
   document.getElementById('refresh').addEventListener('click', () => refresh(true));
+
+  document.getElementById('pager').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-buffer]');
+    if (!button) return;
+    setPushBuffer(button.dataset.buffer);
+  });
 
   /* Unlock WebAudio on the first tap so a countdown restored from a previous
      launch can beep without tapping the tracked arrival again. */

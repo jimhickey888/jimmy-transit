@@ -1,9 +1,9 @@
 # Jimmy Transit Tracker
 
 A one-screen-per-page iPhone web app showing the next arrivals for the
-buses around Braemar Hill and in Wimbledon, London, in six swipeable
+buses around Braemar Hill and in Wimbledon, London, in seven swipeable
 pages: **Citybus**, **Taikoo ↔ New Trend**, **KMB**, **Minibuses**,
-**London** and **Info**.
+**London**, **Settings** and **Info**.
 
 **Citybus** — routes **27**, **85**, **25A** and **25** (outbound):
 
@@ -60,6 +60,12 @@ Court”, not “Hangking”).
   **2A**, **307P**, **678**, **77**, **81**, **8H**, **99**, **N122** and
   **N8X**, with departure and arrival groups at those two stops.
 
+**Settings** — a **Push notifications buffer** control: **2 min** (default),
+**1 min** or **Off**. The labelled 10–2 alerts and the “arriving” alert move
+with the buffer; “departing” stays at the predicted arrival time, except when
+the buffer is off, where it fires one minute after. In-app countdown/beeps are
+unaffected.
+
 **Info** — lists the live-data endpoints, app version and build date/time,
 and API call counts for Citybus, KMB, Minibuses, TfL and the push worker:
 **Launch** (since this launch) and **Install** (stored on the device across
@@ -85,8 +91,9 @@ poles serve more than one direction.
 
 ## What it does
 
-- Six pages — **Citybus**, **Taikoo ↔ New Trend**, **KMB**,
-  **Minibuses**, **London** and **Info**. A tab bar under the status line
+- Seven pages — **Citybus**, **Taikoo ↔ New Trend**, **KMB**,
+  **Minibuses**, **London**, **Settings** and **Info**. A tab bar under the
+  status line
   jumps straight to any page (it highlights the current one and scrolls
   itself into view), and swiping left/right still works. Each page keeps
   its own scroll position.
@@ -107,14 +114,13 @@ poles serve more than one direction.
 - The tracked bar has a **Keep screen on** chip (Wake Lock) so the display
   stays awake while you watch a bus approach.
 - With the optional push worker deployed, the same bar has an **Alerts
-  10 → 0 min** chip: Web Push notifications labelled **10, 8, 6, 4, 2 and
-  0 minutes**. The 10-4 alerts are sent **two minutes early**, there is an
-  **in 2 min** alert four minutes before, an **arriving** alert two minutes
-  before and a **departing** alert at the predicted arrival time. If the live
-  prediction moves
-  earlier and a milestone would be missed, it is sent immediately instead of
-  being skipped. The app beeps and flashes the countdown at the labels
-  themselves. See `worker/README.md`.
+  10 → 0 min** chip: Web Push notifications for 10, 8, 6, 4, 2, **arriving**
+  and **departing**. The lead comes from **Settings → Push notifications
+  buffer**: **2 min** (default), **1 min** or **Off**. Labelled alerts and
+  “arriving” move with it; “departing” is at arrival, or one minute after
+  when off. If a live ETA update passes a milestone, it is sent immediately
+  instead of skipped. In-app beeps stay at the labels. See
+  `worker/README.md`.
 - Where the operator publishes a vehicle ID (TfL), each arrival also shows
   the fleet bus ID.
 - Arrivals are grouped by **stop and direction**, not by route: each stop
