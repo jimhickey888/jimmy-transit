@@ -12,8 +12,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.11.0';
-const APP_BUILD = '24 Nov 2026, 01:04 HKT';
+const APP_VERSION = '2.12.0';
+const APP_BUILD = '24 Nov 2026, 01:17 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -93,10 +93,15 @@ const loadPrefs = () => {
   try {
     saved = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
   } catch { /* corrupt storage */ }
-  const prefs = { screenOn: false, pushBuffer: 2, ...saved };
-  prefs.pushBuffer = [0, 1, 2].includes(Number(prefs.pushBuffer))
-    ? Number(prefs.pushBuffer)
-    : 2;
+  const prefs = {
+    screenOn: false,
+    pushBuffer: 'adaptive',
+    bufferExplicit: false,
+    ...saved,
+  };
+  if (!prefs.bufferExplicit || !['adaptive', 0, 1, 2].includes(prefs.pushBuffer)) {
+    prefs.pushBuffer = 'adaptive';
+  }
   return prefs;
 };
 
@@ -1139,35 +1144,42 @@ function callsHtml() {
     </section>`;
 }
 
-function pushBufferText(buffer) {
-  if (buffer === 2) {
+function pushBufferText(setting) {
+  if (setting === 'adaptive') {
+    return 'Adaptive uses two minutes off-peak and one minute during weekday '
+      + 'commute hours (Hong Kong 07:00–09:30 and 17:00–19:30; London '
+      + '07:00–10:00 and 16:00–19:00, in each city’s time). Weekends are '
+      + 'off-peak.';
+  }
+  if (setting === 2) {
     return 'Alerts fire two minutes before their labelled time (“arriving” two minutes before the bus, “departing” at arrival).';
   }
-  if (buffer === 1) {
+  if (setting === 1) {
     return 'Alerts fire one minute before their labelled time (“arriving” one minute before, “departing” at arrival).';
   }
   return 'Alerts fire at their labelled times (“arriving” at arrival, “departing” one minute after).';
 }
 
 function settingsHtml() {
-  const buffer = pushBuffer();
+  const setting = pushBufferSetting();
+  const labels = [['adaptive', 'Adaptive'], [2, '2 min'], [1, '1 min'], [0, 'Off']];
   return `
     <section class="info-block">
       <h2>Push notifications</h2>
       <div class="info-card">
         <div class="pref-row">
           <div class="pref-main">
-            <div class="pref-title">Push notifications buffer</div>
+            <div class="pref-title">Push notification buffer</div>
             <div class="pref-hint">Extra lead time before each alert.</div>
           </div>
-          <div class="seg" role="group" aria-label="Push notifications buffer">
-            ${[[2, '2 min'], [1, '1 min'], [0, 'Off']].map(([value, label]) => `
+          <div class="seg" role="group" aria-label="Push notification buffer">
+            ${labels.map(([value, label]) => `
               <button class="seg-btn" type="button" data-buffer="${value}"
-                aria-pressed="${buffer === value}">${label}</button>`).join('')}
+                aria-pressed="${String(setting) === String(value)}">${label}</button>`).join('')}
           </div>
         </div>
       </div>
-      <p class="info-note">${esc(pushBufferText(buffer))}</p>
+      <p class="info-note">${esc(pushBufferText(setting))}</p>
       <p class="info-note">
         This changes only push alerts. The in-app countdown and beeps stay at
         10, 8, 6, 4, 2 and 0 minutes.
@@ -1176,9 +1188,12 @@ function settingsHtml() {
 }
 
 function setPushBuffer(value) {
-  const next = [0, 1, 2].includes(Number(value)) ? Number(value) : 2;
-  if (state.prefs.pushBuffer === next) return;
+  const next = value === 'adaptive'
+    ? 'adaptive'
+    : ([0, 1, 2].includes(Number(value)) ? Number(value) : 'adaptive');
+  if (state.prefs.pushBuffer === next && state.prefs.bufferExplicit) return;
   state.prefs.pushBuffer = next;
+  state.prefs.bufferExplicit = true;
   savePrefs();
 
   const page = PAGES.find((item) => item.id === 'settings');
@@ -1228,8 +1243,11 @@ function infoHtml() {
       <h2>Alerts</h2>
       <p class="info-note">
         With push set up, the alert chip schedules the milestones 10, 8, 6, 4,
-        2, arriving and departing, using the buffer chosen in Settings: two
-        minutes (default), one minute, or off. The labelled alerts and
+        2, arriving and departing, using the buffer chosen in Settings:
+        Adaptive (default), two minutes, one minute, or off. Adaptive uses two
+        minutes off-peak and one minute during weekday commute hours (Hong
+        Kong 07:00–09:30 and 17:00–19:30; London 07:00–10:00 and 16:00–19:00,
+        in each city’s time; weekends are off-peak). The labelled alerts and
         “arriving” move with the buffer; “departing” stays at the predicted
         arrival time, or one minute after when the buffer is off. If an
         updated arrival time passes a milestone, it fires immediately instead
@@ -1345,6 +1363,7 @@ function render() {
     renderPage(page);
   }
   syncTracked();
+  maybeAdjustAdaptiveBuffer();
   renderTracked();
   renderStatus();
 }
@@ -1467,13 +1486,60 @@ async function rescheduleAlert(options = {}) {
   } catch { /* keep the old schedule */ }
 }
 
-function pushBuffer() {
-  const value = Number(state.prefs.pushBuffer);
-  return [0, 1, 2].includes(value) ? value : 2;
+function pushBufferSetting() {
+  const value = state.prefs.pushBuffer;
+  return ['adaptive', 0, 1, 2].includes(value) ? value : 'adaptive';
+}
+
+function serviceTimeZone(t) {
+  if (t && t.timeZone) return t.timeZone;
+  return t && t.pageId === 'london' ? LONDON_TZ : HK_TZ;
+}
+
+function localClock(ms, timeZone) {
+  try {
+    const format = new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    });
+    const parts = {};
+    for (const part of format.formatToParts(new Date(ms))) parts[part.type] = part.value;
+    return {
+      weekday: parts.weekday,
+      minutes: (Number(parts.hour) % 24) * 60 + Number(parts.minute),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/* Weekday commute windows in the arrival's service timezone. */
+const PEAK_WINDOWS = {
+  hk: [[7 * 60, 9 * 60 + 30], [17 * 60, 19 * 60 + 30]],
+  london: [[7 * 60, 10 * 60], [16 * 60, 19 * 60]],
+};
+
+function isPeakArrival(ms, timeZone) {
+  const clock = localClock(ms, timeZone);
+  if (!clock || clock.weekday === 'Sat' || clock.weekday === 'Sun') return false;
+  const windows = timeZone === LONDON_TZ ? PEAK_WINDOWS.london : PEAK_WINDOWS.hk;
+  return windows.some(([start, end]) => clock.minutes >= start && clock.minutes < end);
+}
+
+function effectiveBuffer(t = state.tracked) {
+  const setting = pushBufferSetting();
+  if (setting === 'adaptive') {
+    if (!t) return 2;
+    return isPeakArrival(t.targetMs, serviceTimeZone(t)) ? 1 : 2;
+  }
+  return Number(setting);
 }
 
 function alertSteps(targetMs, bufferMinutes) {
-  const buffer = Number.isFinite(bufferMinutes) ? bufferMinutes : pushBuffer();
+  const buffer = Number.isFinite(bufferMinutes) ? bufferMinutes : effectiveBuffer();
   return ALERT_STEPS.map((step) => {
     let lead;
     if (step.type === 'label') lead = step.base + buffer;
@@ -1490,7 +1556,7 @@ function alertSteps(targetMs, bufferMinutes) {
 
 function alertPlan(targetMs, bufferMinutes) {
   const now = Date.now();
-  const buffer = Number.isFinite(bufferMinutes) ? bufferMinutes : pushBuffer();
+  const buffer = Number.isFinite(bufferMinutes) ? bufferMinutes : effectiveBuffer();
   return alertSteps(targetMs, buffer).filter((step) => step.fireAt > now + 20000);
 }
 
@@ -1541,6 +1607,14 @@ function toggleTracked(pill) {
       && alertPlan(pill.targetMs).length) {
     ensurePushSubscription().then(scheduleAlert).catch(() => {});
   }
+}
+
+function maybeAdjustAdaptiveBuffer() {
+  const t = state.tracked;
+  if (!t || !t.alert || !t.alert.active) return;
+  if (pushBufferSetting() !== 'adaptive') return;
+  if (t.alert.buffer === effectiveBuffer(t)) return;
+  rescheduleAlert({ skipCatchUp: true, prune: true });
 }
 
 function clearTracked() {
@@ -1844,7 +1918,7 @@ async function scheduleAlert(sub, options = {}) {
   if (!t) return;
 
   const now = Date.now();
-  const buffer = pushBuffer();
+  const buffer = effectiveBuffer(t);
   const previous = t.alert && t.alert.active && t.alert.fires ? t.alert.fires : null;
   const steps = [];
 

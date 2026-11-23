@@ -2,10 +2,10 @@
 
 Sends **Web Push notifications** for the 10/8/6/4/2 milestones, an
 **arriving** alert and a **departing** alert. The app’s **Settings → Push
-notifications buffer** decides the lead: **2 min** (labels at 12/10/8/6/4,
-arriving 2 before, departing at arrival), **1 min** (11/9/7/5/3, arriving 1
-before, departing at arrival) or **Off** (10/8/6/4/2, arriving at arrival,
-departing one minute after). The client computes the fire times.
+notification buffer** decides the lead: **Adaptive** (default: two minutes
+off-peak, one minute during weekday commute hours in the arrival’s city),
+**2 min**, **1 min** or **Off** (arriving at arrival, departing one minute
+after). The client computes the fire times.
 
 It is a single Cloudflare Worker (free plan is enough): alerts and
 subscriptions live in a **Durable Object** whose alarm sends at the due

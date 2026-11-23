@@ -60,11 +60,13 @@ Court”, not “Hangking”).
   **2A**, **307P**, **678**, **77**, **81**, **8H**, **99**, **N122** and
   **N8X**, with departure and arrival groups at those two stops.
 
-**Settings** — a **Push notifications buffer** control: **2 min** (default),
-**1 min** or **Off**. The labelled 10–2 alerts and the “arriving” alert move
-with the buffer; “departing” stays at the predicted arrival time, except when
-the buffer is off, where it fires one minute after. In-app countdown/beeps are
-unaffected.
+**Settings** — a **Push notification buffer** control: **Adaptive** (default),
+**2 min**, **1 min** or **Off**. Adaptive uses two minutes off-peak and one
+minute during weekday commute hours (Hong Kong 07:00–09:30 and 17:00–19:30;
+London 07:00–10:00 and 16:00–19:00, in each city’s time; weekends are
+off-peak). The labelled 10–2 alerts and “arriving” move with the buffer;
+“departing” stays at arrival, or one minute after when off. In-app
+countdown/beeps are unaffected.
 
 **Info** — lists the live-data endpoints, app version and build date/time,
 and API call counts for Citybus, KMB, Minibuses, TfL and the push worker:
@@ -115,10 +117,11 @@ poles serve more than one direction.
   stays awake while you watch a bus approach.
 - With the optional push worker deployed, the same bar has an **Alerts
   10 → 0 min** chip: Web Push notifications for 10, 8, 6, 4, 2, **arriving**
-  and **departing**. The lead comes from **Settings → Push notifications
-  buffer**: **2 min** (default), **1 min** or **Off**. Labelled alerts and
-  “arriving” move with it; “departing” is at arrival, or one minute after
-  when off. If a live ETA update passes a milestone, it is sent immediately
+  and **departing**. The lead comes from **Settings → Push notification
+  buffer**: **Adaptive** (default), **2 min**, **1 min** or **Off**. Adaptive
+  is two minutes off-peak and one minute during weekday commute hours in the
+  arrival’s city. Labelled alerts and “arriving” move with it; “departing” is
+  at arrival, or one minute after when off. If a live ETA update passes a milestone, it is sent immediately
   instead of skipped. In-app beeps stay at the labels. See
   `worker/README.md`.
 - Where the operator publishes a vehicle ID (TfL), each arrival also shows
