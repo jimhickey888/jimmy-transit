@@ -12,8 +12,8 @@ const TFL_API = 'https://api.tfl.gov.uk';
 const HK_TZ = 'Asia/Hong_Kong';
 const LONDON_TZ = 'Europe/London';
 
-const APP_VERSION = '2.10.7';
-const APP_BUILD = '24 Nov 2026, 00:34 HKT';
+const APP_VERSION = '2.10.8';
+const APP_BUILD = '24 Nov 2026, 00:38 HKT';
 
 /* Optional push alerts. Once the Cloudflare Worker in worker/ is deployed,
    paste its URL and VAPID public key here to turn on the alert chip. */
@@ -21,33 +21,14 @@ const PUSH_ENDPOINT = 'https://jimmy-transit-push.jimhickey.workers.dev';
 const PUSH_VAPID_KEY = 'BCPXl_A_ZsChEqNNcVJgMpjKCvKXUlpFE1-TQlxoPgYxLOUDX09V49xnJ4U6DKK1BS80-upzWIAB3aOBNeyC2DM';
 /* Alerts are scheduled at these minutes before departure (0 = due). */
 const ALERT_STEPS = [
-  { key: '10', base: 10, extra: true, title: (code) => `${code} in 10 min` },
-  { key: '8', base: 8, extra: true, title: (code) => `${code} in 8 min` },
-  { key: '6', base: 6, extra: true, title: (code) => `${code} in 6 min` },
-  { key: '4', base: 4, extra: true, title: (code) => `${code} in 4 min` },
-  { key: '2', base: 2, extra: true, title: (code) => `${code} in 2 min` },
-  { key: 'arriving', base: 2, extra: false, title: (code) => `${code} arriving` },
-  { key: '0', base: 0, extra: false, title: (code) => `${code} departing` },
+  { key: '10', lead: 12, title: (code) => `${code} in 10 min` },
+  { key: '8', lead: 10, title: (code) => `${code} in 8 min` },
+  { key: '6', lead: 8, title: (code) => `${code} in 6 min` },
+  { key: '4', lead: 6, title: (code) => `${code} in 4 min` },
+  { key: '2', lead: 4, title: (code) => `${code} in 2 min` },
+  { key: 'arriving', lead: 2, title: (code) => `${code} arriving` },
+  { key: '0', lead: 0, title: (code) => `${code} departing` },
 ];
-
-/* Conservative margin for labels 10-2, tightened when the tracked arrival
-   was refreshed within the last minute. */
-const ALERT_LEAD_FRESH_MS = 60000;
-
-function trackedDataAge() {
-  const t = state.tracked;
-  if (!t || !t.source) return Infinity;
-  if (t.source.type === 'segment') {
-    const cache = state.segments.get(t.source.key);
-    return cache ? Date.now() - (cache.at || 0) : Infinity;
-  }
-  const cache = state.etas.get(t.source.key);
-  return cache ? Date.now() - (cache.at || 0) : Infinity;
-}
-
-function alertLeadMinutes() {
-  return trackedDataAge() <= ALERT_LEAD_FRESH_MS ? 1 : 2;
-}
 /* In-app beeps happen at the same points, in seconds before departure. */
 const IN_APP_MARKS = [600, 480, 360, 240, 120, 0];
 
@@ -1187,13 +1168,12 @@ function infoHtml() {
       <p class="info-note">
         With push set up, the alert chip schedules notifications labelled 10,
         with push, notifications are scheduled for 10, 8, 6, 4 and 2 minutes
-        with a safety margin: two minutes normally, or one minute when the
-        tracked arrival was refreshed in the last 60 seconds. “arriving” is
-        two minutes before and “departing” at the predicted arrival time. If
-        an updated arrival time passes a milestone, it fires immediately
-        instead of being skipped. In the app the milestones beep and flash
-        the countdown. iOS only allows web push for apps added to the Home
-        Screen, and delivery is best effort.
+        (each two minutes early), plus “arriving” at two minutes before and
+        “departing” at the predicted arrival time. If an updated arrival time
+        passes a milestone, it fires immediately instead of being skipped. In
+        the app the milestones beep and flash the countdown. iOS only allows
+        web push for apps added to the Home Screen, and delivery is best
+        effort.
       </p>
     </section>
     <p class="info-note">
@@ -1297,7 +1277,6 @@ function render() {
     renderPage(page);
   }
   syncTracked();
-  maybeAdjustAlertLead();
   renderTracked();
   renderStatus();
 }
@@ -1420,19 +1399,18 @@ async function rescheduleAlert() {
   } catch { /* keep the old schedule */ }
 }
 
-function alertSteps(targetMs, leadMinutes) {
+function alertSteps(targetMs) {
   return ALERT_STEPS.map((step) => ({
     key: step.key,
-    lead: step.base + (step.extra ? leadMinutes : 0),
+    lead: step.lead,
     title: step.title,
-    fireAt: targetMs - (step.base + (step.extra ? leadMinutes : 0)) * 60000,
+    fireAt: targetMs - step.lead * 60000,
   }));
 }
 
-function alertPlan(targetMs, leadMinutes) {
+function alertPlan(targetMs) {
   const now = Date.now();
-  const lead = Number.isFinite(leadMinutes) ? leadMinutes : alertLeadMinutes();
-  return alertSteps(targetMs, lead).filter((step) => step.fireAt > now + 20000);
+  return alertSteps(targetMs).filter((step) => step.fireAt > now + 20000);
 }
 
 /* Marks already in the past when tracking starts must not beep. */
@@ -1482,14 +1460,6 @@ function toggleTracked(pill) {
       && alertPlan(pill.targetMs).length) {
     ensurePushSubscription().then(scheduleAlert).catch(() => {});
   }
-}
-
-function maybeAdjustAlertLead() {
-  const t = state.tracked;
-  if (!t || !t.alert || !t.alert.active) return;
-  const lead = alertLeadMinutes();
-  if (t.alert.lead === lead) return;
-  rescheduleAlert();
 }
 
 function clearTracked() {
@@ -1793,11 +1763,10 @@ async function scheduleAlert(sub) {
   if (!t) return;
 
   const now = Date.now();
-  const leadMinutes = alertLeadMinutes();
   const previous = t.alert && t.alert.active && t.alert.fires ? t.alert.fires : null;
   const steps = [];
 
-  for (const step of alertSteps(t.targetMs, leadMinutes)) {
+  for (const step of alertSteps(t.targetMs)) {
     if (step.fireAt > now + 20000) {
       steps.push(step);
       continue;
@@ -1820,7 +1789,6 @@ async function scheduleAlert(sub) {
   /* Re-opening the app should not rewrite an unchanged schedule; that was
      costing six alert writes plus a subscription write per launch. */
   const unchanged = previous
-    && t.alert.lead === leadMinutes
     && steps.length === Object.keys(previous).length
     && steps.every((step) => Number(previous[step.key]) === Number(step.fireAt));
   if (unchanged && Date.now() - (t.alert.postedAt || 0) < 6 * 60 * 60 * 1000) {
@@ -1880,7 +1848,6 @@ async function scheduleAlert(sub) {
     ids,
     minutes: steps.map((step) => step.key),
     fires,
-    lead: leadMinutes,
     active: true,
     postedAt: Date.now(),
   };

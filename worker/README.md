@@ -1,11 +1,8 @@
 # Jimmy Transit push worker
 
-Sends **Web Push notifications** for the 10/8/6/4/2 milestones with a
-two-minute safety margin (12/10/8/6/4 minutes before), or a one-minute margin
-(11/9/7/5/3) when the app refreshed the tracked arrival in the last 60
-seconds. There is an **arriving** alert at 2 minutes before and a
-**departing** alert at the predicted arrival time. The app reschedules when
-that freshness changes.
+Sends **Web Push notifications** at 12, 10, 8, 6 and 4 minutes before the
+bus (`in 10 min` … `in 2 min`), an **arriving** alert at 2 minutes before,
+and a **departing** alert at the predicted arrival time.
 It is a single Cloudflare Worker (free plan is enough) with a KV namespace
 and a one-minute cron trigger. The app itself stays static on GitHub Pages.
 
