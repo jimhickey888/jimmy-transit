@@ -372,7 +372,7 @@ export default {
     }
 
     if (url.pathname === '/' || url.pathname === '/health') {
-      return json({ ok: true, service: 'jimmy-transit-push', now: Date.now() }, 200, origin);
+      return json({ ok: true, service: 'jimmy-transit-push', scheduler: 'next-pointer', now: Date.now() }, 200, origin);
     }
 
     if (url.pathname === '/alert' && request.method === 'POST') {
